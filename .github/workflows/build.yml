@@ -1,0 +1,55 @@
+name: Build Screen Translator
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+      - name: Build app
+        run: pyinstaller --noconfirm ScreenTranslator.spec
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+      - name: Build installer
+        shell: powershell
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\ScreenTranslator.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenTranslator-Windows
+          path: release/*.exe
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-build.txt
+      - name: Build app
+        run: pyinstaller --noconfirm ScreenTranslator.spec
+      - name: Create test DMG
+        run: |
+          mkdir -p release
+          codesign --deep --force --sign - dist/ScreenTranslator.app || true
+          hdiutil create -volname "Screen Translator" -srcfolder dist/ScreenTranslator.app -ov -format UDZO release/ScreenTranslator-v0.8.0-macOS.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenTranslator-macOS
+          path: release/*.dmg
