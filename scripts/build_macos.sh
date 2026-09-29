@@ -18,6 +18,6 @@ hdiutil create \
   -volname "Screen Translator" \
   -srcfolder dist/ScreenTranslator.app \
   -ov -format UDZO \
-  release/ScreenTranslator-v0.8.0-macOS.dmg
+  release/ScreenTranslator-v0.9.2-macOS.dmg
 
-echo "Created release/ScreenTranslator-v0.8.0-macOS.dmg"
+echo "Created release/ScreenTranslator-v0.9.2-macOS.dmg"

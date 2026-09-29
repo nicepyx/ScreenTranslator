@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import gc
 import time
 from pathlib import Path
 import sys
@@ -59,6 +60,10 @@ def check_fuzzy_cache() -> None:
             assert cache.get_fuzzy("en", "fr", "What are you doing here ?", namespace="plain", threshold=0.95) is None
         finally:
             cache_module.cache_db_path = original
+            # sqlite context managers commit transactions but do not close the
+            # connection. Collect released connections before Windows removes
+            # the temporary database (the cache implementation is unchanged).
+            gc.collect()
 
 def check_vad() -> None:
     sr = 16000
@@ -93,7 +98,7 @@ def main() -> None:
     check_context()
     check_fuzzy_cache()
     check_vad()
-    print("Screen Translator v0.8 core self-test: PASS")
+    print("Screen Translator v0.9 core self-test: PASS")
 
 
 if __name__ == "__main__":

@@ -1,194 +1,159 @@
-# Screen Translator v0.8
+# Screen Translator v0.9.2
 
-本地优先的 Windows / macOS 实时翻译工具。支持屏幕 OCR、游戏窗口、系统声音 / 麦克风、VAD 自动断句、流式 Partial / Final 字幕、上下文翻译、翻译历史和可定制字幕叠加层。
+> UI 已按目标图重新还原主窗口与字幕设置，并把共用按钮、下拉框、复选框等替换为像素素材。Design Board 仅作设计参考；字幕、迷你条和词汇弹窗仍是独立窗口。详见 [视觉还原与实际截图](UI_VISUAL_RESTORE.md)；此前的架构拆分记录见 [UI_REFACTOR_CHANGELOG.md](UI_REFACTOR_CHANGELOG.md)。
 
-v0.8 集中完成两项升级：**自由选择目标语言 + 语言包管理**，以及 **现代像素风桌面 UI**。
+# Screen Translator v0.9
 
-## v0.8 主要变化
+跨 Windows / macOS 的本地屏幕与声音实时翻译器。v0.9 重点不再扩展翻译模型，而是完成 **Desktop UX / Workflow Upgrade** 与 **Pixel UI System**。
 
-### 1. 多语言自由互译
+## v0.9 重点变化
 
-核心语言默认安装：
+### 1. 取消主页
+- 左侧导航直接从“屏幕翻译”开始。
+- 自动记住最后使用页面，下一次启动恢复。
 
-- 简体中文
-- English
-- Français
-- 日本語
+### 2. 只保留浅色像素主题
+- 删除深色主题切换。
+- 主窗口、按钮、输入框、下拉框、复选框、滑条、滚动条、进度条、弹窗统一使用浅色像素视觉。
+- 翻译正文仍使用系统清晰字体，避免长时间阅读疲劳。
+- `screen_translator/resources/pixel/ui_reference_v09.png` 保留本轮生成的 UI 美术参考图。
+- `screen_translator/resources/pixel_ui/` 为精确可用的小尺寸控件素材。
 
-这些语言现在都可以作为源语言或目标语言，例如：
+### 3. 系统托盘模式
+关闭主窗口默认只隐藏到系统托盘，实时翻译可以继续运行。托盘菜单支持：
+- 打开主窗口
+- 单次屏幕翻译
+- 开始 / 暂停屏幕实时翻译
+- 开始 / 暂停声音翻译
+- 迷你控制条
+- 退出程序
 
-- English → 简体中文
-- 简体中文 → English
-- Français → 日本語
-- 日本語 → Français
+### 4. 全局快捷键中心
+默认快捷键：
+- `Ctrl + Alt + Q`：屏幕翻译
+- `Ctrl + Alt + S`：开始 / 暂停屏幕实时翻译
+- `Ctrl + Alt + A`：开始 / 暂停声音翻译
+- `Ctrl + Alt + D`：显示 / 隐藏字幕
+- `Ctrl + Alt + C`：清空字幕
+- `Ctrl + Alt + M`：迷你控制条
+- `Ctrl + Alt + W`：显示主窗口
 
-屏幕翻译和声音翻译都提供 `源语言 ⇄ 目标语言` 控件。源语言仍支持自动检测。
+可在“快捷键”页面重新绑定。全局快捷键由 `pynput` 实现；macOS 第一次使用可能需要辅助功能权限。
 
-### 2. 扩展语言包
+### 5. 记住工作状态
+继承 v0.8 的语言、音频设备、性能、字幕、窗口 Profile 等设置，并新增：
+- 最后使用页面
+- 托盘行为
+- 来源窗口绑定状态
+- 迷你控制条位置
+- 全局快捷键
 
-语言包页面提供以下扩展语言：
+### 6. 来源窗口绑定
+窗口翻译支持绑定来源窗口：
+- 窗口移动：OCR 区域跟随
+- 窗口最小化 / 暂时不可见：自动暂停并隐藏字幕
+- 窗口恢复：继续实时翻译
 
-- Deutsch
-- Español
-- 한국어
-- Italiano
-- Português
-- Русский
+### 7. 迷你悬浮控制条
+实时工作时可仅保留小型置顶控制条：
+- 当前状态
+- 当前翻译方向
+- 暂停
+- 清空字幕
+- 锁定字幕
+- 打开主窗口
 
-安装后会自动加入屏幕翻译和声音翻译的源/目标语言列表。删除语言包不会删除翻译历史。
+### 8. 状态反馈系统
+状态条区分 Ready / Working / Paused / Error，并显示 OCR、模型加载、监听、翻译、等待稳定等实时状态。
 
-当前 NLLB-200、Whisper 和 RapidOCR 都是多语言共享运行时，因此扩展语言包不会为每一种语言重复下载数百 MB 大模型。语言包负责启用语言配置、OCR / ASR 提示和后续可扩展的专用规则。
+### 9. 任务取消与队列
+- 状态条提供“取消任务”。
+- 实时 OCR 忙碌时采用 coalescing queue，只保留最新一帧需求，避免积压。
+- 单次翻译忙碌时可以排队一个下一任务。
+- 已取消的过期 OCR / 翻译结果会被丢弃。
+- 声音翻译继续使用 v0.6 的 Partial 丢弃 / Final 优先队列。
 
-开发版内置兼容语言包配置；正式发布时可设置环境变量：
+### 10. 翻译结果快捷操作
+实时文本区支持：
+- 复制原文
+- 复制译文
+- 朗读译文
+- 清屏
+- 点击单词进入词汇学习
 
-```text
-SCREEN_TRANSLATOR_PACK_BASE_URL=https://your-cdn.example.com/language-packs
-```
+### 11. 词汇学习
+在原文或译文中点击词语：
+- 使用本地翻译模型查询含义
+- 使用系统 TTS 播放发音
+- 查看当前上下文
+- 加入本地词汇记录
 
-程序会优先尝试下载 `<语言代码>.json`，远程不可用时自动回退内置配置。
+“词汇学习”页面可以朗读或删除收藏词汇。
 
-### 3. 现代像素风 UI
+### 12. 本地数据模式
+“数据管理”页面支持：
+- 标准模式：系统默认用户数据目录
+- 自定义路径：例如 `D:\ScreenTranslatorData`
+- 更改路径并迁移数据
+- 恢复标准路径并迁移回来
+- 打开数据目录
+- 清理翻译缓存
 
-v0.8 不再使用顶部 Qt Tab 作为主要导航，改为左侧现代侧边栏：
-
-- 主页
-- 屏幕翻译
-- 声音翻译
-- 翻译记录
+显示占用分类：
+- 翻译 / ASR 模型
 - 语言包
-- 字幕
-- 性能
-- 设置
+- 翻译历史
+- 翻译缓存
+- 配置与 Profile
+- 词汇记录
+- 其他
 
-同时加入一组专门为 Screen Translator 生成的像素风美术素材：应用 Logo、主页、屏幕翻译、声音翻译、历史、语言包、字幕、性能和设置图标。
+> 数据目录修改后建议重启应用，确保当前进程中的模型和 SQLite 对象全部切换到新路径。
 
-像素风只用于品牌和导航视觉；主要文本、设置和字幕保持现代高可读性排版。
+## 继续保留的核心能力
+- Windows Native OCR / RapidOCR fallback
+- macOS Vision OCR
+- Stable Text Detector
+- OCR 智能行 / 段落合并
+- OCR 纠错
+- Fuzzy Cache
+- Context Session
+- 游戏 / 应用独立 Profile
+- Provider 化翻译引擎
+- NLLB 多语言互译
+- VAD 自动断句
+- Partial / Final 实时语音字幕
+- Windows CUDA / macOS Apple Silicon 推理路径
+- 字幕描边、阴影、双语样式、滚动字幕、智能停留、防抖布局、自定义字体
+- 中 / 英 / 法 / 日核心语言与扩展语言包
 
-支持：
+## Windows 开发运行
 
-- 深色主题
-- 浅色主题
-- 卡片式信息层级
-- 主页快捷入口
-- 实时翻译方向提示
-- 字幕设置实时预览
-- 像素风侧边栏图标
-
-## 运行开发版
-
-Windows：
-
-```text
+```bat
 scripts\run_windows.bat
 ```
 
-macOS：
+Python 3.12 可直接使用。
 
-```text
-scripts/run_macos.command
-```
-
-首次运行会安装 Python 依赖。首次实际翻译时会下载本地 NLLB 翻译模型；声音翻译首次使用某个 Whisper 模型时会额外下载对应 ASR 模型。之后可离线运行。
-
-## 推荐测试流程
-
-### 多语言
-
-1. 屏幕翻译：`English → 简体中文`
-2. 点击 `⇄`：测试 `简体中文 → English`
-3. 进入“语言包”，安装 Deutsch
-4. 返回屏幕翻译，确认 Deutsch 已出现在源语言和目标语言列表
-5. 测试 English → Deutsch / Deutsch → 简体中文
-
-### 声音翻译
-
-1. 选择系统声音或麦克风
-2. 选择源语言 / 目标语言
-3. 使用“实时课程 · 低延迟”模式
-4. 检查 Partial 字幕和 Final 字幕是否按目标语言显示
-
-### UI
-
-1. 切换深色 / 浅色主题
-2. 检查不同窗口尺寸下侧边栏和页面是否正常
-3. 测试字幕页面实时预览
-4. 检查像素风图标在 Windows 缩放 100% / 125% / 150% 下是否清晰
-
-## 核心架构
-
-屏幕翻译：
-
-```text
-Capture
-→ Native OCR / RapidOCR fallback
-→ OCR Correction
-→ Smart Text Merge
-→ Stable Text Detector
-→ Fuzzy Cache
-→ Entity / Terminology
-→ Context Session
-→ Translator Provider
-→ History / Overlay
-```
-
-声音翻译：
-
-```text
-Continuous Audio Capture
-→ VAD
-→ Partial ASR
-→ Partial Translation
-→ Final ASR
-→ Context Session
-→ Final Translation
-→ History / Overlay
-```
-
-## 打包
-
-Windows：
-
-```powershell
-scripts\build_windows.ps1
-```
-
-如果安装了 Inno Setup，会生成：
-
-```text
-release/ScreenTranslator-v0.8.0-Windows-Setup.exe
-```
-
-macOS：
+## macOS 开发运行
 
 ```bash
-scripts/build_macos.sh
+chmod +x scripts/run_macos.command
+./scripts/run_macos.command
 ```
 
-生成：
+需要授予屏幕录制 / 麦克风等权限。
+
+## 自动构建
+GitHub Actions：
 
 ```text
-release/ScreenTranslator-v0.8.0-macOS.dmg
+.github/workflows/build.yml
 ```
 
-GitHub Actions 也已配置 Windows / macOS 双平台构建。
+手动运行 Workflow 或 Push `v*` Tag 即可构建 Windows 与 macOS 测试包。
 
-## 注意
-
-- 当前默认 NLLB-200 量化模型为非商业用途许可；公开商业发布前应替换为符合商业授权要求的翻译模型。
-- macOS 系统内部音频仍需要继续完善 ScreenCaptureKit 原生音频捕获路线；麦克风翻译可直接使用。
-- Windows / macOS 原生 OCR 能力取决于系统安装的语言支持；识别质量不足时会回退 RapidOCR。
-- 未安装的扩展语言如果被自动检测到，程序会提示先到“语言包”页面安装。
-
-## 测试
-
-```bash
-python scripts/self_test.py
-```
-
-当前自检覆盖：
-
-- Smart Text Merge
-- Stable Text Detector
-- Context Session（含目标语言隔离）
-- Fuzzy Cache（含源/目标语言隔离）
-- VAD 自动断句
+## 发布注意
+- Windows 未签名安装包可能触发 SmartScreen。
+- macOS 正式对外发布建议 Developer ID 签名 + Notarization。
+- 当前 NLLB 模型许可证需继续按第三方许可说明评估用途。

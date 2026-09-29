@@ -1,14 +1,10 @@
 from pathlib import Path
 
-from platformdirs import user_data_dir
-
-from ..constants import APP_ID
+from .storage import StorageManager
 
 
 def data_dir() -> Path:
-    path = Path(user_data_dir(APP_ID, "Local"))
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return StorageManager().root()
 
 
 def models_dir() -> Path:

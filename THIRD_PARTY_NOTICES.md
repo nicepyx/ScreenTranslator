@@ -19,6 +19,7 @@ Key components include:
 - Hugging Face Hub — model download/cache utilities.
 - SentencePiece — NLLB tokenization.
 - Lingua — lightweight language detection.
+- pynput — cross-platform global hotkey handling.
 
 ## Model weights
 
@@ -32,4 +33,4 @@ If Screen Translator is publicly distributed, bundle the exact upstream license 
 
 ## Project artwork
 
-The pixel-art application/navigation assets under `screen_translator/resources/pixel/` were generated specifically for this Screen Translator prototype and are not copied from the GitHub reference projects used for architectural research.
+The pixel-art application/navigation assets under `screen_translator/resources/pixel/` and the exact control-skin assets under `screen_translator/resources/pixel_ui/` were generated specifically for this Screen Translator prototype and are not copied from the GitHub reference projects used for architectural research.

@@ -1,5 +1,5 @@
 #define MyAppName "Screen Translator"
-#define MyAppVersion "0.8.0"
+#define MyAppVersion "0.9.2"
 #define MyAppPublisher "Local"
 #define MyAppExeName "ScreenTranslator.exe"
 
@@ -11,7 +11,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\Screen Translator
 DefaultGroupName={#MyAppName}
 OutputDir=..\..\release
-OutputBaseFilename=ScreenTranslator-v0.8.0-Windows-Setup
+OutputBaseFilename=ScreenTranslator-v0.9.2-Windows-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

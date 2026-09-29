@@ -1,4 +1,3 @@
-import platform
 import sys
 
 from PySide6.QtCore import QCoreApplication
@@ -7,6 +6,7 @@ from PySide6.QtWidgets import QApplication
 
 from .constants import APP_NAME, APP_VERSION
 from .ui.main_window import MainWindow
+from .ui.theme import FONT_FAMILY
 
 
 def run() -> int:
@@ -15,14 +15,8 @@ def run() -> int:
     QCoreApplication.setOrganizationName("Local")
 
     app = QApplication(sys.argv)
-    app.setQuitOnLastWindowClosed(True)
-    system = platform.system()
-    if system == "Windows":
-        app.setFont(QFont("Segoe UI", 10))
-    elif system == "Darwin":
-        app.setFont(QFont("SF Pro Text", 10))
-    else:
-        app.setFont(QFont("Noto Sans", 10))
+    app.setQuitOnLastWindowClosed(False)
+    app.setFont(QFont(FONT_FAMILY, 10))
 
     window = MainWindow()
     window.show()

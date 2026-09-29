@@ -31,6 +31,7 @@ class TranslationWorker(QRunnable):
         debounce_ms: int = 0,
         force: bool = False,
         allowed_languages: set[str] | None = None,
+        task_id: int = 0,
     ) -> None:
         super().__init__()
         self.image_bgr = image_bgr
@@ -46,6 +47,7 @@ class TranslationWorker(QRunnable):
         self.debounce_ms = int(debounce_ms)
         self.force = force
         self.allowed_languages = allowed_languages
+        self.task_id = int(task_id)
         self.signals = WorkerSignals()
 
     @Slot()
@@ -66,6 +68,7 @@ class TranslationWorker(QRunnable):
             if self.previous_text and corrected == self.previous_text:
                 self.signals.finished.emit(
                     {
+                        "_task_id": self.task_id,
                         "unchanged": True,
                         "source_text": corrected,
                         "lines": lines,
@@ -79,6 +82,7 @@ class TranslationWorker(QRunnable):
                 if not stable.stable:
                     self.signals.finished.emit(
                         {
+                            "_task_id": self.task_id,
                             "pending": True,
                             "source_text": corrected,
                             "waited_ms": stable.waited_ms,
@@ -110,6 +114,7 @@ class TranslationWorker(QRunnable):
             )
             self.signals.finished.emit(
                 {
+                    "_task_id": self.task_id,
                     "unchanged": False,
                     "pending": False,
                     "source_text": result.source_text,

@@ -48,7 +48,7 @@ jobs:
         run: |
           mkdir -p release
           codesign --deep --force --sign - dist/ScreenTranslator.app || true
-          hdiutil create -volname "Screen Translator" -srcfolder dist/ScreenTranslator.app -ov -format UDZO release/ScreenTranslator-v0.8.0-macOS.dmg
+          hdiutil create -volname "Screen Translator" -srcfolder dist/ScreenTranslator.app -ov -format UDZO release/ScreenTranslator-v0.9.2-macOS.dmg
       - uses: actions/upload-artifact@v4
         with:
           name: ScreenTranslator-macOS

@@ -1,6 +1,6 @@
 APP_NAME = "Screen Translator"
 APP_ID = "ScreenTranslator"
-APP_VERSION = "0.8.0"
+APP_VERSION = "0.9.2"
 
 LANGUAGE_CATALOG = {
     "zh": {"label": "简体中文", "native": "简体中文", "nllb": "zho_Hans", "core": True, "flag": "🇨🇳"},
@@ -18,7 +18,7 @@ LANGUAGE_CATALOG = {
 CORE_LANGUAGE_CODES = tuple(code for code, info in LANGUAGE_CATALOG.items() if info["core"])
 EXTENDED_LANGUAGE_CODES = tuple(code for code, info in LANGUAGE_CATALOG.items() if not info["core"])
 
-# Legacy constants are kept for compatibility. v0.8 fills the UI dynamically from LanguagePackManager.
+# Legacy constants are kept for compatibility. v0.9 fills the UI dynamically from LanguagePackManager.
 SOURCE_LANGUAGES = {"auto": "自动检测", **{code: LANGUAGE_CATALOG[code]["label"] for code in CORE_LANGUAGE_CODES}}
 TARGET_LANGUAGES = {code: LANGUAGE_CATALOG[code]["label"] for code in CORE_LANGUAGE_CODES}
 

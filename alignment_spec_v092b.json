@@ -1,0 +1,54 @@
+{
+  "version": "0.9.2b",
+  "purpose": "small icon optical-centering pass",
+  "canonical_button_size": 64,
+  "rules": {
+    "button_content_alignment": "horizontal + vertical center",
+    "button_padding": 0,
+    "icon_scale": "40-46% of button box",
+    "normal_small_button": "clean cream square base",
+    "active_pause": "same base + orange inner keyline"
+  },
+  "patched_regions": [
+    {
+      "region": "subtitle_header",
+      "buttons": [
+        "pin",
+        "close"
+      ],
+      "size": "31x31"
+    },
+    {
+      "region": "subtitle_actions",
+      "buttons": [
+        "speaker",
+        "copy",
+        "star",
+        "view",
+        "trash"
+      ],
+      "size": "35x35"
+    },
+    {
+      "region": "mini_toolbar",
+      "buttons": [
+        "pause",
+        "view",
+        "settings",
+        "close"
+      ],
+      "size": "39x39"
+    },
+    {
+      "region": "word_popup",
+      "buttons": [
+        "close",
+        "star"
+      ],
+      "sizes": [
+        "31x31",
+        "43x43"
+      ]
+    }
+  ]
+}

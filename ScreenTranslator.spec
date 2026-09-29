@@ -4,7 +4,9 @@ from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
-datas = [("screen_translator/resources/builtin_glossaries.json", "screen_translator/resources"), ("screen_translator/resources/pixel", "screen_translator/resources/pixel")]
+datas = [("screen_translator/resources/builtin_glossaries.json", "screen_translator/resources"), ("screen_translator/resources/pixel", "screen_translator/resources/pixel"), ("screen_translator/resources/pixel_ui", "screen_translator/resources/pixel_ui"), ("screen_translator/resources/pixel_v092", "screen_translator/resources/pixel_v092")]
+datas.append(("screen_translator/resources/ui_v2", "screen_translator/resources/ui_v2"))
+datas.append(("screen_translator/resources/ui_target", "screen_translator/resources/ui_target"))
 binaries = []
 hiddenimports = []
 
@@ -30,6 +32,7 @@ for package in [
     "winrt.windows.graphics.imaging",
     "winrt.windows.storage.streams",
     "mlx_whisper",
+    "pynput",
 ]:
     try:
         d, b, h = collect_all(package)
@@ -47,6 +50,8 @@ hiddenimports += [
     "winrt.windows.foundation",
     "Vision",
     "mlx_whisper",
+    "pynput",
+    "PySide6.QtTextToSpeech",
 ]
 
 analysis = Analysis(
@@ -100,6 +105,6 @@ if sys.platform == "darwin":
             "LSUIElement": False,
             "NSMicrophoneUsageDescription": "Screen Translator uses microphone audio only for local speech recognition and translation.",
             "NSScreenCaptureUsageDescription": "Screen Translator captures selected screen areas for local OCR translation.",
-            "NSHumanReadableCopyright": "Screen Translator v0.8.0",
+            "NSHumanReadableCopyright": "Screen Translator v0.9.2",
         },
     )

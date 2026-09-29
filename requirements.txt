@@ -24,3 +24,6 @@ pyobjc-framework-Vision>=10.3,<12; platform_system == "Darwin"
 
 # Apple Silicon low-latency ASR. Intel Macs automatically keep faster-whisper CPU.
 mlx-whisper>=0.4; platform_system == "Darwin" and platform_machine == "arm64"
+
+# Global hotkeys
+pynput>=1.7,<2

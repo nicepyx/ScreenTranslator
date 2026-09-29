@@ -11,5 +11,15 @@ if not exist .venv (
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+
+echo Running startup preflight...
+python scripts\preflight.py
+if errorlevel 1 (
+  echo.
+  echo Preflight failed. Screen Translator was not started.
+  pause
+  exit /b 1
+)
+
 python main.py
 pause
