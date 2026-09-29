@@ -200,11 +200,6 @@ NLLB_LANGUAGE_CODES = {code: info["nllb"] for code, info in LANGUAGE_CATALOG.ite
 DEFAULT_TARGET_LANGUAGE = "zh"
 
 
-# Quantized non-commercial build of Meta NLLB-200 distilled 600M.
-# Override with SCREEN_TRANSLATOR_MODEL_REPO for testing another compatible CT2 repo.
-DEFAULT_TRANSLATION_MODEL_REPO = "luigi000/nllb-200-distilled-600M-ct2-int8"
-MODEL_SUBDIR = "nllb-200-distilled-600m-ct2-int8"
-
 SUBTITLE_DISPLAY_MODES = [("只显示译文", "translation"), ("原文 + 译文", "bilingual")]
 
 SUBTITLE_RECENT_COUNTS = [("最近 2 条", 2), ("最近 3 条 · 推荐", 3)]

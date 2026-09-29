@@ -4,13 +4,14 @@ from typing import Callable, Optional
 
 from ..providers import NLLBProvider, TranslationProvider
 from ..constants import DEFAULT_TARGET_LANGUAGE
+from .model_manager import ModelManager
 
 StatusCallback = Optional[Callable[[str], None]]
 
 
 class LocalTranslator:
-    def __init__(self) -> None:
-        self._providers: dict[str, TranslationProvider] = {"nllb": NLLBProvider()}
+    def __init__(self, model_manager: ModelManager | None = None) -> None:
+        self._providers: dict[str, TranslationProvider] = {"nllb": NLLBProvider(model_manager)}
         self._active_key = "nllb"
 
     @property

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import traceback
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
 from .text_pipeline import TranslationPipeline
+from .model_manager import user_error_message
 
 
 class WordLookupSignals(QObject):
@@ -41,5 +41,4 @@ class WordLookupWorker(QRunnable):
                 "context": self.context,
             })
         except Exception as exc:
-            detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
-            self.signals.failed.emit(detail)
+            self.signals.failed.emit(user_error_message(exc))

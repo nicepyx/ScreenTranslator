@@ -48,11 +48,11 @@ Windows 原生 Qt 后端、Python 3.12 / PySide6 6.11.2：
 
 实际截图（1280×800 logical pixels、125%）：
 
-![主窗口](logs/ui-target/screen-1280x800-1.25.png)
+![主窗口](docs/screenshots/screen-1280x800-1.25.png)
 
-![字幕设置](logs/ui-target/subtitles-1280x800-1.25.png)
+![字幕设置](docs/screenshots/subtitles-1280x800-1.25.png)
 
-同一目录中还保存十页、迷你条与词汇弹窗截图，供继续逐页比较。
+`docs/screenshots/` 保存十页、迷你条与词汇弹窗的最新 125% 验收截图。旧轮次和重复截图已清理；上述命令重新生成的图片保存在被 Git 忽略的 `logs/`。
 
 ## 本轮文件清单
 

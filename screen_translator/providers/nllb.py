@@ -10,6 +10,7 @@ import sentencepiece as spm
 from ..constants import NLLB_LANGUAGE_CODES
 from ..core.cache import TranslationCache
 from ..core.models import TranslationModelManager
+from ..core.model_manager import ModelManager
 from .base import TranslationProvider
 
 StatusCallback = Optional[Callable[[str], None]]
@@ -19,8 +20,8 @@ class NLLBProvider(TranslationProvider):
     key = "nllb"
     label = "NLLB-200 Local"
 
-    def __init__(self) -> None:
-        self._manager = TranslationModelManager()
+    def __init__(self, model_manager: ModelManager | None = None) -> None:
+        self._manager = TranslationModelManager(model_manager)
         self._translator: ctranslate2.Translator | None = None
         self._sp: spm.SentencePieceProcessor | None = None
         self._lock = threading.Lock()
@@ -68,7 +69,7 @@ class NLLBProvider(TranslationProvider):
     def _ensure_loaded(self, status: StatusCallback = None) -> None:
         if self._translator is not None and self._sp is not None:
             return
-        model_dir = self._manager.ensure_downloaded(status)
+        model_dir = self._manager.local_path()
         if status:
             status("正在加载本地多语言翻译模型…")
         self._translator = self._make_translator(model_dir, status)

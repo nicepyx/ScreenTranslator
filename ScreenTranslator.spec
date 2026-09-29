@@ -4,9 +4,13 @@ from PyInstaller.utils.hooks import collect_all
 
 block_cipher = None
 
-datas = [("screen_translator/resources/builtin_glossaries.json", "screen_translator/resources"), ("screen_translator/resources/pixel", "screen_translator/resources/pixel"), ("screen_translator/resources/pixel_ui", "screen_translator/resources/pixel_ui"), ("screen_translator/resources/pixel_v092", "screen_translator/resources/pixel_v092")]
-datas.append(("screen_translator/resources/ui_v2", "screen_translator/resources/ui_v2"))
-datas.append(("screen_translator/resources/ui_target", "screen_translator/resources/ui_target"))
+datas = [
+    ("screen_translator/resources/builtin_glossaries.json", "screen_translator/resources"),
+    ("screen_translator/resources/model_manifest.json", "screen_translator/resources"),
+    ("screen_translator/resources/pixel", "screen_translator/resources/pixel"),
+    ("screen_translator/resources/pixel_ui", "screen_translator/resources/pixel_ui"),
+    ("screen_translator/resources/ui_target", "screen_translator/resources/ui_target"),
+]
 binaries = []
 hiddenimports = []
 

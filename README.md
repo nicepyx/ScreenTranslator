@@ -16,8 +16,10 @@
 - 删除深色主题切换。
 - 主窗口、按钮、输入框、下拉框、复选框、滑条、滚动条、进度条、弹窗统一使用浅色像素视觉。
 - 翻译正文仍使用系统清晰字体，避免长时间阅读疲劳。
-- `screen_translator/resources/pixel/ui_reference_v09.png` 保留本轮生成的 UI 美术参考图。
+- `design/reference/` 保存当前目标图，`screen_translator/resources/ui_target/` 保存当前像素皮肤素材。
 - `screen_translator/resources/pixel_ui/` 为精确可用的小尺寸控件素材。
+
+历史版本说明已归档到 [docs/history](docs/history/README.md)。最新验收截图保存在 `docs/screenshots/`；`logs/` 仅存放可重新生成的本地测试输出，不纳入版本控制。
 
 ### 3. 系统托盘模式
 关闭主窗口默认只隐藏到系统托盘，实时翻译可以继续运行。托盘菜单支持：
@@ -157,3 +159,11 @@ GitHub Actions：
 - Windows 未签名安装包可能触发 SmartScreen。
 - macOS 正式对外发布建议 Developer ID 签名 + Notarization。
 - 当前 NLLB 模型许可证需继续按第三方许可说明评估用途。
+
+## 首次安装与模型
+
+- 应用启动只检查本地模型状态，不会访问 Hugging Face，也不依赖用户目录中的 Hugging Face 缓存。
+- 用户首次启动屏幕或声音翻译时，应用会先显示模型名称、大小和保存位置；确认后才在后台下载。
+- 下载文件保存在数据目录的 `downloads` 中并支持断点续传。SHA-256 校验通过后，模型才会原子安装到 `models`。
+- 下载源与固定 revision、文件大小及 SHA-256 位于 `screen_translator/resources/model_manifest.json`。
+- 无法联网时可在模型提示窗口选择本地 ZIP。ZIP 可包含一个外层目录，但内部文件必须与 manifest 中该模型的 `files` 一致。

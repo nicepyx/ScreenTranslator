@@ -34,7 +34,9 @@ class StorageManager:
     """
 
     def __init__(self) -> None:
-        self.bootstrap_root = Path(user_data_dir(APP_ID, "Local"))
+        preferred = Path(user_data_dir(APP_ID, appauthor=False))
+        legacy = Path(user_data_dir(APP_ID, "Local"))
+        self.bootstrap_root = legacy if legacy.exists() and not preferred.exists() else preferred
         self.bootstrap_root.mkdir(parents=True, exist_ok=True)
         self.config_path = self.bootstrap_root / "storage.json"
 

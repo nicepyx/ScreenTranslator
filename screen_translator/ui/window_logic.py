@@ -21,9 +21,11 @@ from ..core.window_capture import crop_window_rect, get_application_window, list
 from ..core.worker import TranslationWorker
 from ..core.stability import StableTextDetector
 from ..core.profiles import GameProfileStore
+from ..core.model_manager import ModelManager
 from .scene_presets import SCENE_PRESETS as USAGE_MODES
 from .overlay import TranslationOverlay
 from .region_selector import RegionSelector
+from .model_dialogs import request_model
 
 
 class TranslatorWindowLogicMixin:
@@ -31,14 +33,15 @@ class TranslatorWindowLogicMixin:
 
     def _initialize_logic(self) -> None:
         self._thread_pool = QThreadPool.globalInstance()
+        self._model_manager = ModelManager()
         self._ocr = OCRService()
-        self._translator = LocalTranslator()
+        self._translator = LocalTranslator(self._model_manager)
         self._pipeline = TranslationPipeline(self._translator)
         self._history = TranslationHistory()
         self._stable_detector = StableTextDetector()
         self._profiles = GameProfileStore()
         self._runtime_monitor = RuntimePerformanceMonitor()
-        self._audio_transcriber = AudioTranscriber()
+        self._audio_transcriber = AudioTranscriber(self._model_manager)
         self._audio_worker: AudioTranslationWorker | None = None
 
         self._selector: RegionSelector | None = None
@@ -98,8 +101,18 @@ class TranslatorWindowLogicMixin:
     def _refresh_model_status(self) -> None:
         self.status_label.setText(
             "本地翻译模型已就绪，可离线使用。" if self._translator.model_ready
-            else "翻译模型尚未下载；首次翻译时会自动下载。"
+            else "翻译模型尚未安装；开始翻译时可选择下载或从本地导入。"
         )
+
+
+    def _require_model(self, model_id: str, continuation) -> bool:
+        if self._model_manager.is_installed(model_id):
+            return True
+        if request_model(self, self._model_manager, model_id):
+            self._refresh_model_status()
+            self._refresh_storage_summary()
+            QTimer.singleShot(0, continuation)
+        return False
 
 
     def _restore_settings(self) -> None:
@@ -866,6 +879,8 @@ class TranslatorWindowLogicMixin:
 
 
     def _start_screen_once(self) -> None:
+        if not self._require_model("translation-nllb", self._start_screen_once):
+            return
         if self.screen_mode_combo.currentData() == "window":
             rect = self._current_window_rect()
             if rect is None:
@@ -887,6 +902,8 @@ class TranslatorWindowLogicMixin:
     def _toggle_live(self) -> None:
         if self._live_mode:
             self._stop_live()
+            return
+        if not self._require_model("translation-nllb", self._toggle_live):
             return
         if self._audio_running:
             self._stop_audio()
@@ -1151,6 +1168,13 @@ class TranslatorWindowLogicMixin:
     def _toggle_audio(self) -> None:
         if self._audio_running:
             self._stop_audio()
+            return
+        if not self._require_model("translation-nllb", self._toggle_audio):
+            return
+        speech_model_id = self._audio_transcriber.required_model_id(
+            str(self.whisper_model_combo.currentData() or "base")
+        )
+        if not self._require_model(speech_model_id, self._toggle_audio):
             return
         if self._live_mode:
             self._stop_live()

@@ -1,5 +1,7 @@
 # UI 架构重构 · 第一阶段 · 2026-09-29
 
+> 本文件保留阶段历史。后续视觉还原见 [UI_VISUAL_RESTORE.md](UI_VISUAL_RESTORE.md)。文中旧 `ui_v2`、`pixel_v092`、素材生成脚本、兼容入口和旧截图已在清理时移除，不代表当前依赖。
+
 本轮按附件最后的阶段要求交付：架构清理、Pixel Design System、MainWindow Shell、Screen Translation Page，并实际启动验证。其余页面的完整视觉迁移属于后续阶段。
 
 ## 审计结论

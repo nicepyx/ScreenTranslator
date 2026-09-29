@@ -8,6 +8,8 @@ from typing import Callable, Optional, TYPE_CHECKING
 
 import numpy as np
 
+from .model_manager import ModelManager
+
 if TYPE_CHECKING:
     from faster_whisper import WhisperModel
 
@@ -191,13 +193,8 @@ def open_audio_recorder(device_key: str, kind: str):
 class AudioTranscriber:
     """ASR provider facade with automatic CUDA / Apple Silicon acceleration."""
 
-    MLX_MODELS = {
-        "tiny": "mlx-community/whisper-tiny-mlx",
-        "base": "mlx-community/whisper-base-mlx",
-        "small": "mlx-community/whisper-small-mlx",
-    }
-
-    def __init__(self) -> None:
+    def __init__(self, model_manager: ModelManager | None = None) -> None:
+        self._model_manager = model_manager or ModelManager()
         self._models: dict[tuple[str, str], "WhisperModel"] = {}
         self._lock = threading.Lock()
         self._cpu_threads = max(1, min(6, (os.cpu_count() or 4) - 1))
@@ -230,7 +227,7 @@ class AudioTranscriber:
     def _is_apple_silicon() -> bool:
         return platform.system() == "Darwin" and platform.machine().lower() in {"arm64", "aarch64"}
 
-    def _choose_backend(self) -> str:
+    def _choose_backend(self, model_size: str | None = None) -> str:
         if self._backend_preference not in {"", "auto"}:
             return self._backend_preference
         if self._is_apple_silicon():
@@ -248,8 +245,12 @@ class AudioTranscriber:
                 pass
         return "cpu"
 
+    def required_model_id(self, model_size: str) -> str:
+        backend = self._choose_backend(model_size)
+        return f"whisper-mlx-{model_size}" if backend == "mlx" else f"whisper-{model_size}"
+
     def _model(self, model_size: str, status: Optional[Callable[[str], None]] = None) -> "WhisperModel":
-        backend = self._choose_backend()
+        backend = self._choose_backend(model_size)
         if backend == "mlx":
             raise RuntimeError("MLX backend does not use faster-whisper model objects.")
         key = (backend, model_size)
@@ -258,21 +259,22 @@ class AudioTranscriber:
             if model is not None:
                 self._resolved_backend = backend
                 return model
+            model_path = self._model_manager.get_model_path(f"whisper-{model_size}")
             if status:
-                status(f"首次使用：正在下载并加载 Whisper {model_size}（{backend.upper()}）…")
+                status(f"正在加载本地 Whisper {model_size}（{backend.upper()}）…")
             from faster_whisper import WhisperModel
 
             try:
                 if backend == "cuda":
                     model = WhisperModel(
-                        model_size,
+                        str(model_path),
                         device="cuda",
                         compute_type="float16",
                         num_workers=1,
                     )
                 else:
                     model = WhisperModel(
-                        model_size,
+                        str(model_path),
                         device="cpu",
                         compute_type="int8",
                         cpu_threads=self._cpu_threads,
@@ -289,7 +291,7 @@ class AudioTranscriber:
                 model = self._models.get(key)
                 if model is None:
                     model = WhisperModel(
-                        model_size,
+                        str(model_path),
                         device="cpu",
                         compute_type="int8",
                         cpu_threads=self._cpu_threads,
@@ -313,9 +315,9 @@ class AudioTranscriber:
             status(f"正在使用 Apple Silicon 加速识别语音{'（临时字幕）' if partial else ''}…")
         import mlx_whisper
 
-        repo = self.MLX_MODELS.get(model_size, self.MLX_MODELS["base"])
+        model_path = self._model_manager.get_model_path(f"whisper-mlx-{model_size}")
         kwargs = {
-            "path_or_hf_repo": repo,
+            "path_or_hf_repo": str(model_path),
             "verbose": None,
             "language": None if source_mode == "auto" else source_mode,
             "task": "transcribe",
@@ -341,7 +343,7 @@ class AudioTranscriber:
         partial: bool = False,
         initial_prompt: str | None = None,
     ) -> tuple[str, str, float]:
-        backend = self._choose_backend()
+        backend = self._choose_backend(model_size)
         if backend == "mlx":
             try:
                 return self._transcribe_mlx(
@@ -350,9 +352,12 @@ class AudioTranscriber:
                 )
             except Exception as exc:
                 self._backend_note = f"MLX 回退：{exc}"
-                if status:
+                if self._model_manager.is_installed(f"whisper-{model_size}") and status:
                     status("Apple MLX Whisper 不可用，已回退 faster-whisper CPU。")
-                self._backend_preference = "cpu"
+                if self._model_manager.is_installed(f"whisper-{model_size}"):
+                    self._backend_preference = "cpu"
+                else:
+                    raise
 
         model = self._model(model_size, status)
         language = None if source_mode == "auto" else source_mode

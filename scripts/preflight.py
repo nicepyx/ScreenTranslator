@@ -67,16 +67,7 @@ def check_assets() -> None:
     missing = [str(pixel / name) for name in required if not (pixel / name).exists()]
     missing += [str(ui / name) for name in required_ui if not (ui / name).exists()]
 
-    plates = ROOT / "screen_translator/resources/ui_v2"
-    required_plates = ["frame_window", "titlebar", "card", "button_primary", "button_secondary", "button_danger", "combo", "nav_normal", "nav_selected"]
-    required_plates += ["scene_" + name for name in ("general", "game", "course", "video", "meeting", "custom")]
-    missing += [str(plates / f"{name}.png") for name in required_plates if not (plates / f"{name}.png").exists()]
-    decor = ROOT / "screen_translator/resources/pixel_v092/decor_cat.png"
-    if not decor.exists():
-        missing.append(str(decor))
     spec = (ROOT / "ScreenTranslator.spec").read_text("utf-8")
-    if '"screen_translator/resources/ui_v2"' not in spec:
-        raise RuntimeError("PyInstaller spec does not include UI plates")
     target = ROOT / "screen_translator/resources/ui_target"
     required_target = ["frame_window", "titlebar", "card", "status_card", "combo", "nav_selected",
                        "scene", "scene_selected", "app_logo", "hero_screen", "landscape", "sidebar_cat",
@@ -87,6 +78,9 @@ def check_assets() -> None:
     missing += [str(target / f"{name}.png") for name in required_target if not (target / f"{name}.png").exists()]
     if '"screen_translator/resources/ui_target"' not in spec:
         raise RuntimeError("PyInstaller spec does not include target UI assets")
+    manifest = ROOT / "screen_translator/resources/model_manifest.json"
+    if not manifest.is_file() or '"screen_translator/resources/model_manifest.json"' not in spec:
+        raise RuntimeError("Model manifest is missing from the PyInstaller bundle")
     if missing:
         raise RuntimeError("Missing UI assets:\n" + "\n".join(missing))
 

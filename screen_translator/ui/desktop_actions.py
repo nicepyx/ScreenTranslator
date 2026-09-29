@@ -214,6 +214,8 @@ class DesktopActionsMixin:
 
 
     def _lookup_word(self,word:str) -> None:
+        if not self._require_model("translation-nllb", lambda: self._lookup_word(word)):
+            return
         src=str(self.audio_source_combo.currentData() if self.stack.currentIndex()==self.PAGE_AUDIO else self.source_combo.currentData() or "auto"); dst=str(self.audio_target_combo.currentData() if self.stack.currentIndex()==self.PAGE_AUDIO else self.target_combo.currentData() or "zh")
         if src=="auto":
             from ..core.language import detect_source_language
@@ -420,6 +422,8 @@ class DesktopActionsMixin:
 
 
     def _lookup_translated_word(self, word: str) -> None:
+        if not self._require_model("translation-nllb", lambda: self._lookup_translated_word(word)):
+            return
         current_target = str(self.audio_target_combo.currentData() if self.stack.currentIndex()==self.PAGE_AUDIO else self.target_combo.currentData() or "zh")
         current_source = str(self.audio_source_combo.currentData() if self.stack.currentIndex()==self.PAGE_AUDIO else self.source_combo.currentData() or "auto")
         if current_source == "auto":

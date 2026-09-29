@@ -3,7 +3,6 @@ from __future__ import annotations
 import queue
 import threading
 import time
-import traceback
 
 import numpy as np
 from PySide6.QtCore import QObject, QRunnable, Signal, Slot
@@ -11,6 +10,7 @@ from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 from .audio import AudioTranscriber, mono_float32, open_audio_recorder, resample_audio
 from .text_pipeline import TranslationPipeline
 from .vad import AdaptiveVAD, VADConfig
+from .model_manager import user_error_message
 from ..constants import LANGUAGE_CATALOG
 
 
@@ -189,8 +189,8 @@ class AudioTranslationWorker(QRunnable):
                             break
                         except queue.Full:
                             continue
-        except BaseException as exc:
-            self.signals.failed.emit(str(exc))
+        except Exception as exc:
+            self.signals.failed.emit(user_error_message(exc))
             self._stop_event.set()
 
     def _translation_loop(self, translation_queue: queue.Queue) -> None:
@@ -257,8 +257,8 @@ class AudioTranslationWorker(QRunnable):
                     "正在监听声音…（流式临时字幕 + VAD 自动断句）"
                     if self.partial_enabled else "正在监听声音…（VAD 自动断句）"
                 )
-        except BaseException as exc:
-            self.signals.failed.emit(str(exc))
+        except Exception as exc:
+            self.signals.failed.emit(user_error_message(exc))
             self._stop_event.set()
 
     @Slot()
@@ -362,8 +362,7 @@ class AudioTranslationWorker(QRunnable):
                     {"utterance_id": utterance_id, "partial": False, "audio": tail},
                 )
         except Exception as exc:
-            detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
-            self.signals.failed.emit(detail)
+            self.signals.failed.emit(user_error_message(exc))
         finally:
             self._stop_event.set()
             # Shutdown in pipeline order. The ASR sentinel must come before the translation
