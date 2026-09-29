@@ -2,7 +2,6 @@ from PySide6.QtCore import QObject, QRunnable, Signal, Slot
 
 from .language import detect_source_language
 from .ocr import OCRService
-from .stability import StableTextDetector
 from .text_pipeline import TranslationPipeline
 from .model_manager import user_error_message
 
@@ -22,13 +21,8 @@ class TranslationWorker(QRunnable):
         ocr_quality: str,
         ocr_service: OCRService,
         pipeline: TranslationPipeline,
-        previous_text: str = "",
-        channel: str = "screen",
         *,
         ocr_backend: str = "auto",
-        stable_detector: StableTextDetector | None = None,
-        debounce_ms: int = 0,
-        force: bool = False,
         allowed_languages: set[str] | None = None,
         task_id: int = 0,
     ) -> None:
@@ -39,12 +33,7 @@ class TranslationWorker(QRunnable):
         self.ocr_quality = ocr_quality
         self.ocr_service = ocr_service
         self.pipeline = pipeline
-        self.previous_text = previous_text.strip()
-        self.channel = channel
         self.ocr_backend = ocr_backend
-        self.stable_detector = stable_detector
-        self.debounce_ms = int(debounce_ms)
-        self.force = force
         self.allowed_languages = allowed_languages
         self.task_id = int(task_id)
         self.signals = WorkerSignals()
@@ -64,33 +53,6 @@ class TranslationWorker(QRunnable):
                 raise RuntimeError("没有识别到可靠文字，请缩小框选范围或切换 OCR 引擎/小字增强。")
 
             corrected = self.pipeline.corrector.correct(raw_text)
-            if self.previous_text and corrected == self.previous_text:
-                self.signals.finished.emit(
-                    {
-                        "_task_id": self.task_id,
-                        "unchanged": True,
-                        "source_text": corrected,
-                        "lines": lines,
-                        "ocr_backend": self.ocr_service.last_backend,
-                    }
-                )
-                return
-
-            if self.stable_detector is not None and not self.force and self.debounce_ms > 0:
-                stable = self.stable_detector.observe(self.channel, corrected, self.debounce_ms)
-                if not stable.stable:
-                    self.signals.finished.emit(
-                        {
-                            "_task_id": self.task_id,
-                            "pending": True,
-                            "source_text": corrected,
-                            "waited_ms": stable.waited_ms,
-                            "lines": lines,
-                            "ocr_backend": self.ocr_service.last_backend,
-                        }
-                    )
-                    return
-
             source_lang = self.source_mode
             if source_lang == "auto":
                 source_lang = detect_source_language(corrected)
@@ -106,7 +68,7 @@ class TranslationWorker(QRunnable):
                 corrected,
                 source_lang,
                 target_lang=self.target_lang,
-                channel=self.channel,
+                channel="screen",
                 is_ocr=True,
                 use_context=True,
                 status=lambda message: self.signals.status.emit(message),
@@ -114,8 +76,6 @@ class TranslationWorker(QRunnable):
             self.signals.finished.emit(
                 {
                     "_task_id": self.task_id,
-                    "unchanged": False,
-                    "pending": False,
                     "source_text": result.source_text,
                     "translated_text": result.translated_text,
                     "source_lang": source_lang,

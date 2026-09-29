@@ -39,11 +39,11 @@ class HardwareInfo:
         gpu_low = self.gpu_name.lower()
         arch_low = self.architecture.lower()
         if "nvidia" in gpu_low:
-            lines.append("加速：检测到 NVIDIA；v0.6 会尝试 CUDA 加速 Whisper 与 NLLB，运行库不完整时自动回退 CPU。")
+            lines.append("加速：检测到 NVIDIA；Whisper 会尝试 CUDA，NLLB 翻译固定使用 CPU INT8。")
         elif self.apple_chip or arch_low in {"arm64", "aarch64"} and self.os_name == "macOS":
-            lines.append("加速：Apple Silicon；v0.6 优先使用 MLX Whisper，翻译继续使用 CTranslate2/Accelerate 路线。")
+            lines.append("加速：Apple Silicon 优先使用 MLX Whisper；NLLB 翻译固定使用 CPU INT8。")
         else:
-            lines.append("加速：未检测到可直接启用的 NVIDIA/Apple Silicon ASR 后端，将使用 CPU INT8。")
+            lines.append("加速：Whisper 与 NLLB 将使用 CPU；NLLB 计算类型固定为 INT8。")
         return "\n".join(lines)
 
 
@@ -122,7 +122,7 @@ def detect_hardware() -> HardwareInfo:
 
 
 def recommend_profile(info: HardwareInfo) -> tuple[str, str]:
-    """Conservative recommendation; v0.6 can additionally accelerate ASR/translation on supported hardware."""
+    """Conservative recommendation; supported hardware can accelerate Whisper ASR."""
     cores = info.physical_cores or max(1, info.logical_cores // 2)
     ram = info.memory_gb
     cpu_text = f"{info.cpu_name} {info.apple_chip}".lower()
@@ -137,8 +137,8 @@ def recommend_profile(info: HardwareInfo) -> tuple[str, str]:
         key = "balanced"
 
     gpu_text = info.gpu_name.lower()
-    # Hardware accelerators materially change ASR/translation throughput in v0.6. Keep the
-    # recommendation conservative because screen capture/OCR/UI still consume CPU and memory.
+    # Hardware accelerators materially change Whisper throughput. OCR, translation, and the UI
+    # still consume CPU and memory, so the recommendation remains conservative.
     if "nvidia" in gpu_text and ram >= 16 and cores >= 6 and key in {"eco", "balanced"}:
         key = "high"
 
@@ -163,16 +163,16 @@ def recommend_profile(info: HardwareInfo) -> tuple[str, str]:
 def profile_requirements_text() -> str:
     return (
         "Windows\n"
-        "• 省资源：4 核级 CPU / 8GB；CPU INT8；建议 Tiny、较低扫描频率。\n"
+        "• 省资源：4 核级 CPU / 8GB；NLLB CPU INT8；建议 Tiny Whisper。\n"
         "• 均衡：6 核级 CPU / 16GB；Base Whisper；适合通用字幕。\n"
-        "• 高性能：8 核+ / 16GB+；若有 NVIDIA RTX 且 CUDA 12 + cuDNN 9 可用，v0.6 会自动尝试 CUDA。\n"
-        "• 极致：12 核+ / 32GB+，或较新 RTX；适合 0.3~0.5 秒扫描与流式 Partial ASR。\n\n"
+        "• 高性能：8 核+ / 16GB+；若 CUDA 运行库可用，Whisper 会自动尝试 NVIDIA 加速。\n"
+        "• 极致：12 核+ / 32GB+，或较新 RTX；适合 Small Whisper 与流式 Partial ASR。\n\n"
         "macOS\n"
         "• Intel：继续使用 faster-whisper CPU；建议 16GB 与均衡档。\n"
         "• Apple Silicon 8GB+：自动尝试 MLX Whisper；Base 模型适合课程。\n"
         "• M Pro/Max/Ultra 16GB+：适合高性能/极致档与更频繁 Partial ASR。\n\n"
         "OCR：Windows 优先 WinRT 原生 OCR，macOS 优先 Vision；识别质量不足自动回退 RapidOCR。\n"
-        "说明：GPU/MLX 是否真正启用以“实时资源占用”中的推理后端为准；无法加载时程序会自动回退。"
+        "说明：NLLB 翻译始终使用 CPU INT8；Whisper 是否启用 GPU/MLX 以“实时资源占用”中的推理后端为准。"
     )
 
 

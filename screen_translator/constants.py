@@ -23,17 +23,6 @@ SOURCE_LANGUAGES = {"auto": "自动检测", **{code: LANGUAGE_CATALOG[code]["lab
 TARGET_LANGUAGES = {code: LANGUAGE_CATALOG[code]["label"] for code in CORE_LANGUAGE_CODES}
 
 
-REFRESH_PRESETS = [
-    ("0.3 秒 · 低延迟（高占用）", 300),
-    ("0.5 秒 · 很流畅（高占用）", 500),
-    ("0.7 秒 · 高性能", 700),
-    ("1.0 秒 · 推荐", 1000),
-    ("1.5 秒 · 平衡", 1500),
-    ("2.0 秒 · 省资源", 2000),
-    ("3.0 秒 · 低占用", 3000),
-    ("5.0 秒 · 最低占用", 5000),
-]
-
 OCR_QUALITY_PRESETS = [
     ("快速 · 原始分辨率", "fast"),
     ("推荐 · 小字增强", "balanced"),
@@ -52,19 +41,16 @@ WHISPER_MODEL_PRESETS = [
     ("Small · 更准确 / 约 460MB", "small"),
 ]
 
-# Performance profiles control quality/CPU budgets; v0.6 separately auto-detects CUDA/MLX acceleration.
+# Performance profiles control quality/CPU budgets; CUDA/MLX acceleration applies only to Whisper.
 PERFORMANCE_PROFILES = {
     "eco": {
         "label": "省资源",
-        "refresh_ms": 2000,
         "ocr_quality": "fast",
         "whisper_model": "tiny",
         "vad_sensitivity": "low",
         "translation_beam": 1,
         "whisper_beam": 1,
         "max_cpu_threads": 4,
-        "screen_change_threshold": 2.2,
-        "stable_debounce_ms": 260,
         "partial_interval_ms": 1400,
         "vad_end_silence_ms": 520,
         "max_utterance_ms": 9000,
@@ -73,15 +59,12 @@ PERFORMANCE_PROFILES = {
     },
     "balanced": {
         "label": "均衡",
-        "refresh_ms": 1000,
         "ocr_quality": "balanced",
         "whisper_model": "base",
         "vad_sensitivity": "normal",
         "translation_beam": 2,
         "whisper_beam": 2,
         "max_cpu_threads": 6,
-        "screen_change_threshold": 1.35,
-        "stable_debounce_ms": 180,
         "partial_interval_ms": 1000,
         "vad_end_silence_ms": 420,
         "max_utterance_ms": 8000,
@@ -90,15 +73,12 @@ PERFORMANCE_PROFILES = {
     },
     "high": {
         "label": "高性能",
-        "refresh_ms": 700,
         "ocr_quality": "balanced",
         "whisper_model": "base",
         "vad_sensitivity": "normal",
         "translation_beam": 2,
         "whisper_beam": 2,
         "max_cpu_threads": 8,
-        "screen_change_threshold": 0.9,
-        "stable_debounce_ms": 120,
         "partial_interval_ms": 850,
         "vad_end_silence_ms": 360,
         "max_utterance_ms": 7000,
@@ -107,15 +87,12 @@ PERFORMANCE_PROFILES = {
     },
     "ultra": {
         "label": "极致",
-        "refresh_ms": 500,
         "ocr_quality": "enhanced",
         "whisper_model": "small",
         "vad_sensitivity": "high",
         "translation_beam": 2,
         "whisper_beam": 2,
         "max_cpu_threads": 12,
-        "screen_change_threshold": 0.65,
-        "stable_debounce_ms": 80,
         "partial_interval_ms": 700,
         "vad_end_silence_ms": 320,
         "max_utterance_ms": 6500,
@@ -129,47 +106,35 @@ PERFORMANCE_PROFILE_ORDER = ["eco", "balanced", "high", "ultra"]
 USAGE_MODES = {
     "general": {
         "label": "通用",
-        "refresh_ms": 1000,
-        "stable_debounce_ms": 180,
         "partial_enabled": True,
         "partial_interval_ms": 1000,
         "vad_end_silence_ms": 420,
         "max_utterance_ms": 8000,
         "ocr_quality": "balanced",
-        "screen_change_threshold": 1.0,
     },
     "course": {
         "label": "实时课程 · 低延迟",
-        "refresh_ms": 300,
-        "stable_debounce_ms": 80,
         "partial_enabled": True,
         "partial_interval_ms": 750,
         "vad_end_silence_ms": 340,
         "max_utterance_ms": 6500,
         "ocr_quality": "fast",
-        "screen_change_threshold": 0.35,
     },
     "game": {
         "label": "游戏字幕",
-        "refresh_ms": 500,
-        "stable_debounce_ms": 150,
         "partial_enabled": True,
         "partial_interval_ms": 900,
         "vad_end_silence_ms": 400,
         "max_utterance_ms": 7500,
         "ocr_quality": "balanced",
-        "screen_change_threshold": 0.60,
     },
     "quality": {
         "label": "高质量",
-        "refresh_ms": 1000,
-        "stable_debounce_ms": 260,
         "partial_enabled": False,
         "partial_interval_ms": 1200,
         "vad_end_silence_ms": 520,
         "max_utterance_ms": 10000,
         "ocr_quality": "enhanced",
-        "screen_change_threshold": 0.80,
     },
 }
 
@@ -290,4 +255,3 @@ SUBTITLE_PRESETS = {
     },
 }
 SUBTITLE_MAX_LINES = [("自动", 0), ("1 行", 1), ("2 行 · 推荐", 2), ("3 行", 3)]
-WINDOW_CROP_MODES = [("整个窗口", "full"), ("底部 40% · 游戏字幕推荐", "bottom40"), ("底部 25%", "bottom25")]

@@ -6,7 +6,6 @@ from PySide6.QtCore import QObject, Signal
 
 DEFAULT_HOTKEYS = {
     "screen_once": "Ctrl+Alt+Q",
-    "toggle_live": "Ctrl+Alt+S",
     "toggle_audio": "Ctrl+Alt+A",
     "toggle_overlay": "Ctrl+Alt+D",
     "clear_overlay": "Ctrl+Alt+C",
@@ -15,8 +14,7 @@ DEFAULT_HOTKEYS = {
 }
 
 ACTION_LABELS = {
-    "screen_once": "屏幕翻译（框选/当前窗口）",
-    "toggle_live": "开始 / 暂停屏幕实时翻译",
+    "screen_once": "框选并翻译一次",
     "toggle_audio": "开始 / 暂停声音翻译",
     "toggle_overlay": "显示 / 隐藏字幕",
     "clear_overlay": "清空当前字幕",

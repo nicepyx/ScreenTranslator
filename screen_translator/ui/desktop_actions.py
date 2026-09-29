@@ -40,13 +40,6 @@ class DesktopActionsMixin:
         self._sync_usage_buttons()
 
 
-    def _update_window_preview(self, *_args) -> None:
-        if not hasattr(self, "window_combo") or not hasattr(self, "window_summary"):
-            return
-        text = self.window_combo.currentText().strip() or "未选择窗口"
-        self.window_summary.setText(text)
-
-
     def _overlay_setting_changed(self, *_args) -> None:
         super()._overlay_setting_changed(*_args)
         self._update_subtitle_preview()
@@ -75,7 +68,7 @@ class DesktopActionsMixin:
     def _setup_tray(self) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable(): return
         self.tray=QSystemTrayIcon(pixel_icon("app_logo"),self); self.tray.setToolTip("Screen Translator")
-        menu=QMenu(); show=menu.addAction("打开主窗口"); show.triggered.connect(self._show_main_window); menu.addSeparator(); once=menu.addAction("屏幕翻译"); once.triggered.connect(self._start_screen_once); live=menu.addAction("开始 / 暂停实时翻译"); live.triggered.connect(self._toggle_live); audio=menu.addAction("开始 / 暂停声音翻译"); audio.triggered.connect(self._toggle_audio); menu.addSeparator(); mini=menu.addAction("显示迷你控制条"); mini.triggered.connect(self._toggle_mini_toolbar); quit_act=menu.addAction("退出"); quit_act.triggered.connect(self._quit_application)
+        menu=QMenu(); show=menu.addAction("打开主窗口"); show.triggered.connect(self._show_main_window); menu.addSeparator(); once=menu.addAction("框选并翻译一次"); once.triggered.connect(self._start_screen_once); audio=menu.addAction("开始 / 暂停声音翻译"); audio.triggered.connect(self._toggle_audio); menu.addSeparator(); mini=menu.addAction("显示迷你控制条"); mini.triggered.connect(self._toggle_mini_toolbar); quit_act=menu.addAction("退出"); quit_act.triggered.connect(self._quit_application)
         self.tray.setContextMenu(menu); self.tray.activated.connect(lambda reason: self._show_main_window() if reason==QSystemTrayIcon.ActivationReason.DoubleClick else None); self.tray.show()
 
 
@@ -123,7 +116,6 @@ class DesktopActionsMixin:
 
     def _handle_hotkey_action(self,action:str) -> None:
         if action=="screen_once": self._start_screen_once()
-        elif action=="toggle_live": self._toggle_live()
         elif action=="toggle_audio": self._toggle_audio()
         elif action=="toggle_overlay": self.overlay_visible_check.setChecked(not self.overlay_visible_check.isChecked())
         elif action=="clear_overlay": self._clear_overlay_and_text()
@@ -131,27 +123,15 @@ class DesktopActionsMixin:
         elif action=="show_window": self._show_main_window()
 
 
-    def _bind_source_window(self) -> None:
-        self.screen_mode_combo.setCurrentIndex(self.screen_mode_combo.findData("window"))
-        self.bind_window_check.setChecked(True)
-        self._refresh_windows()
-        self.window_combo.showPopup()
-
-    def _start_selection(self, live: bool) -> None:
+    def _start_selection(self) -> None:
         self.screen_options_dialog.hide()
         self.screen_results_dialog.hide()
-        super()._start_selection(live)
-
-    def _screen_mode_changed(self, *_args) -> None:
-        super()._screen_mode_changed(*_args)
-        self._source_stack.setCurrentIndex(1 if self.screen_mode_combo.currentData() == "window" else 0)
-        self.window_label.setEnabled(True)
-        self.live_button.setText("停止实时翻译" if self._live_mode else "开始翻译")
+        super()._start_selection()
 
     def _status_text_changed(self, text: str) -> None:
         if any(key in text for key in ("失败", "错误")):
             state, art = "Error", "status_error"
-        elif self._busy or self._live_mode or self._audio_running:
+        elif self._busy or self._audio_running:
             state, art = "Working", "status_busy"
         elif any(key in text for key in ("暂停", "停止", "取消")):
             state, art = "Paused", "status_paused"
@@ -181,8 +161,7 @@ class DesktopActionsMixin:
 
     def _pause_active_translation(self) -> None:
         if self._audio_running: self._stop_audio()
-        elif self._live_mode: self._stop_live()
-        else: self.status_label.setText("当前没有正在运行的实时任务。")
+        else: self.status_label.setText("当前没有正在运行的声音翻译任务。")
 
 
     def _toggle_overlay_lock(self) -> None:
@@ -190,7 +169,7 @@ class DesktopActionsMixin:
 
 
     def _clear_overlay_and_text(self) -> None:
-        self._overlay.clear_history(); self._overlay.hide(); self.source_edit.clear(); self.translation_edit.clear(); self.status_label.setText("字幕和实时文本已清空。")
+        self._overlay.clear_history(); self._overlay.hide(); self.source_edit.clear(); self.translation_edit.clear(); self.status_label.setText("字幕和翻译文本已清空。")
 
 
     def _clear_result_text(self) -> None: self._clear_overlay_and_text()
@@ -262,8 +241,8 @@ class DesktopActionsMixin:
 
 
     def _choose_storage_path(self) -> None:
-        if self._busy or self._live_mode or self._audio_running:
-            QMessageBox.information(self, "数据迁移", "请先停止正在运行的屏幕/声音翻译任务，再迁移数据目录。")
+        if self._busy or self._audio_running:
+            QMessageBox.information(self, "数据迁移", "请先停止正在运行的翻译任务，再迁移数据目录。")
             return
         path=QFileDialog.getExistingDirectory(self,"选择 Screen Translator 数据目录",str(self._storage_manager.root()))
         if not path:return
@@ -272,8 +251,8 @@ class DesktopActionsMixin:
 
 
     def _restore_standard_storage(self) -> None:
-        if self._busy or self._live_mode or self._audio_running:
-            QMessageBox.information(self, "数据迁移", "请先停止正在运行的屏幕/声音翻译任务，再迁移数据目录。")
+        if self._busy or self._audio_running:
+            QMessageBox.information(self, "数据迁移", "请先停止正在运行的翻译任务，再迁移数据目录。")
             return
         try:
             if self._storage_manager.mode() == "custom":
@@ -294,7 +273,7 @@ class DesktopActionsMixin:
 
 
     def _quit_application(self) -> None:
-        self._force_quit=True; self._hotkeys.stop(); self._live_timer.stop(); self._perf_timer.stop();
+        self._force_quit=True; self._hotkeys.stop(); self._perf_timer.stop();
         if self._audio_worker is not None:self._audio_worker.stop()
         self._save_settings(); self._overlay.close(); self.mini_toolbar.close(); self.word_popup.close();
         self.screen_options_dialog.close()
@@ -310,31 +289,6 @@ class DesktopActionsMixin:
         self._quit_application(); event.accept()
 
 
-    def _live_tick(self) -> None:
-        if self._busy:
-            self._queued_screen_capture=True; return
-        if self.screen_mode_combo.currentData()=="window":
-            rect=self._current_window_rect()
-            if rect is None:
-                if hasattr(self, "bind_window_check") and self.bind_window_check.isChecked():
-                    # The OS window handle can change after an app/game restarts. Rebind by the
-                    # stable owner+title profile key before deciding the source is unavailable.
-                    saved_profile = str(self._settings.value("window_profile_key", ""))
-                    if saved_profile:
-                        self._saved_window_profile_key = saved_profile
-                        self._refresh_windows()
-                        rect = self._current_window_rect()
-                    if rect is None:
-                        self._source_window_suspended=True; self._overlay.hide(); self.status_label.setText("来源窗口当前不可见/已最小化，翻译已自动暂停，恢复窗口后会继续。")
-                        return
-                self._stop_live(keep_status=True); self.status_label.setText("来源窗口已关闭或不可见，实时翻译已停止。")
-                return
-            if self._source_window_suspended:
-                self._source_window_suspended=False; self.status_label.setText("来源窗口已恢复，继续实时翻译。")
-            self._selected_rect=rect
-        if self._selected_rect is not None:self._capture_and_translate()
-
-
     def _on_audio_transcript(self,result:dict) -> None:
         super()._on_audio_transcript(result)
         if hasattr(self,"auto_mini_check") and self.auto_mini_check.isChecked(): self.mini_toolbar.show()
@@ -343,12 +297,9 @@ class DesktopActionsMixin:
     def _cancel_current_task(self) -> None:
         if self._audio_running:
             self._stop_audio(); self.status_label.setText("声音翻译取消中…"); return
-        if self._live_mode:
-            self._stop_live(); self.status_label.setText("实时屏幕翻译已取消。"); return
         if self._busy:
             self._screen_task_generation += 1
             self._ignore_next_failure = True
-            self._queued_screen_capture = False
             self.status_label.setText("当前任务已标记取消，正在等待后台推理结束并丢弃结果…")
             return
         self.status_label.setText("当前没有可取消的任务。")
@@ -378,24 +329,15 @@ class DesktopActionsMixin:
         if getattr(self, "_manual_screen_queued", False) and not self._busy:
             self._manual_screen_queued = False
             QTimer.singleShot(0, self._start_screen_once)
-        elif self._queued_screen_capture and self._live_mode and not self._busy:
-            self._queued_screen_capture = False
-            QTimer.singleShot(0, self._capture_and_translate)
-        if self._live_mode and hasattr(self, "auto_mini_check") and self.auto_mini_check.isChecked():
-            self.mini_toolbar.show()
 
 
     def _restore_settings(self) -> None:
-        desktop_preferences = {key: self._settings.value(key, "true") for key in ("tray_close", "auto_mini_toolbar", "bind_source_window")}
+        desktop_preferences = {key: self._settings.value(key, "true") for key in ("tray_close", "auto_mini_toolbar")}
         super()._restore_settings()
         if hasattr(self, "tray_close_check"):
             self.tray_close_check.setChecked(str(desktop_preferences["tray_close"]).lower() == "true")
         if hasattr(self, "auto_mini_check"):
             self.auto_mini_check.setChecked(str(desktop_preferences["auto_mini_toolbar"]).lower() == "true")
-        if hasattr(self, "bind_window_check"):
-            self.bind_window_check.setChecked(str(desktop_preferences["bind_source_window"]).lower() == "true")
-
-
     def _save_settings(self) -> None:
         if self._restoring_settings:
             return
@@ -404,8 +346,6 @@ class DesktopActionsMixin:
             self._settings.setValue("tray_close", self.tray_close_check.isChecked())
         if hasattr(self, "auto_mini_check"):
             self._settings.setValue("auto_mini_toolbar", self.auto_mini_check.isChecked())
-        if hasattr(self, "bind_window_check"):
-            self._settings.setValue("bind_source_window", self.bind_window_check.isChecked())
         if hasattr(self, "mini_toolbar"):
             self._settings.setValue("mini_toolbar_x", self.mini_toolbar.x())
             self._settings.setValue("mini_toolbar_y", self.mini_toolbar.y())

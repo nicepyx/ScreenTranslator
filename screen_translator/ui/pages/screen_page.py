@@ -1,8 +1,8 @@
 """Screen page follows the approved main-window reference; dialogs hold detail."""
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QFrame, QStackedWidget
-from ...constants import OCR_QUALITY_PRESETS, REFRESH_PRESETS, WINDOW_CROP_MODES
+from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget, QFrame
+from ...constants import OCR_QUALITY_PRESETS
 from ..scene_presets import SCENE_PRESETS as USAGE_MODES
 from ..assets import pixel_pixmap
 from ..components import PixelButton, PixelCard, PixelComboBox, PixelIconButton, PixelSceneButton
@@ -61,7 +61,7 @@ class ScreenPage(PixelNineSliceFrame):
         layout=QVBoxLayout(self)
         layout.setContentsMargins(20,8,20,20)
         layout.setSpacing(20)
-        layout.addWidget(PageHero("屏幕翻译","在屏幕上选择区域，实时识别并翻译显示为字幕。"))
+        layout.addWidget(PageHero("屏幕翻译","手动框选屏幕区域，完成一次 OCR 与本地翻译。"))
         languages=PixelCard()
         languages.setMinimumHeight(90)
         row=card_layout(languages,QHBoxLayout)
@@ -88,28 +88,18 @@ class ScreenPage(PixelNineSliceFrame):
         source_icon=QLabel()
         source_icon.setPixmap(pixel_pixmap("source",34))
         grid.addWidget(source_icon,0,0)
-        host.window_label=label("来源窗口")
-        grid.addWidget(host.window_label,0,1)
+        grid.addWidget(label("识别区域"),0,1)
         selection=QWidget()
         sr=QHBoxLayout(selection)
         sr.setContentsMargins(0,0,0,0)
         sr.setSpacing(12)
         thumbnail=QLabel()
-        thumbnail.setPixmap(pixel_pixmap("window",68))
+        thumbnail.setPixmap(pixel_pixmap("screen",68))
         sr.addWidget(thumbnail)
-        host._source_stack=QStackedWidget()
-        host.window_combo=PixelComboBox()
-        host.window_combo.flat=True
-        host.window_combo.setMinimumContentsLength(8)
-        host.window_combo.currentIndexChanged.connect(host._window_profile_changed)
-        region_label=label("鼠标框选区域")
-        host._source_stack.addWidget(region_label)
-        host._source_stack.addWidget(host.window_combo)
-        sr.addWidget(host._source_stack,1)
-        host.bind_window_button=PixelButton("绑定窗口")
-        host.bind_window_button.clicked.connect(host._bind_source_window)
-        sr.addWidget(host.bind_window_button)
-        host.source_settings_button=PixelIconButton("settings","识别来源 / 高级设置 / 最近翻译")
+        region_label=label("点击下方按钮后，拖动鼠标框选需要翻译的文字区域",muted=True)
+        region_label.setWordWrap(True)
+        sr.addWidget(region_label,1)
+        host.source_settings_button=PixelIconButton("settings","OCR 设置 / 最近翻译")
         sr.addWidget(host.source_settings_button)
         grid.addWidget(selection,0,2)
         separator=QFrame()
@@ -132,7 +122,7 @@ class ScreenPage(PixelNineSliceFrame):
             scenes.addWidget(button,1)
         custom=PixelSceneButton("自定义","custom")
         custom.setCheckable(False)
-        custom.setToolTip("打开识别设置，调整扫描频率和 OCR 参数")
+        custom.setToolTip("打开 OCR 设置")
         scenes.addWidget(custom,1)
         grid.addLayout(scenes,2,2)
         grid.setColumnStretch(2,1)
@@ -140,17 +130,13 @@ class ScreenPage(PixelNineSliceFrame):
 
         actions=QHBoxLayout()
         actions.setSpacing(12)
-        host.live_button=PixelButton("开始翻译","play",primary=True)
-        host.live_button.setObjectName("ScreenStart")
-        host.live_button.setMinimumHeight(66)
-        host.live_button.setMinimumWidth(250)
-        host.live_button.setMaximumWidth(360)
-        host.live_button.clicked.connect(host._toggle_live)
-        actions.addWidget(host.live_button,3)
-        host.pause_button=PixelButton("暂停","pause")
-        host.pause_button.setMinimumHeight(56)
-        host.pause_button.clicked.connect(host._pause_active_translation)
-        actions.addWidget(host.pause_button,1)
+        host.once_button=PixelButton("框选并翻译一次","screen",primary=True)
+        host.once_button.setObjectName("ScreenStart")
+        host.once_button.setMinimumHeight(66)
+        host.once_button.setMinimumWidth(250)
+        host.once_button.setMaximumWidth(360)
+        host.once_button.clicked.connect(host._start_screen_once)
+        actions.addWidget(host.once_button,3)
         actions.addStretch(1)
         for text,icon,action in (("清空字幕","clear",host._clear_result_text),("迷你模式","pin",host._toggle_mini_toolbar)):
             button=PixelButton(text,icon)
@@ -167,7 +153,7 @@ class ScreenPage(PixelNineSliceFrame):
         host.screen_status_summary=label("Ready")
         host.screen_status_summary.setObjectName("StatusText")
         status_grid.addWidget(host.screen_status_summary,0,1)
-        host.status_label=StatusLabel("准备就绪，按快捷键或点击开始翻译")
+        host.status_label=StatusLabel("准备就绪，按快捷键或点击按钮后框选区域")
         host.status_label.setWordWrap(True)
         host.status_label.setObjectName("Muted")
         host.status_label.textChanged.connect(host._status_text_changed)
@@ -188,37 +174,24 @@ class ScreenPage(PixelNineSliceFrame):
 
         host.screen_options_dialog=QDialog(host)
         host.screen_options_dialog.setWindowTitle("屏幕翻译设置")
-        host.screen_options_dialog.resize(620,590)
+        host.screen_options_dialog.resize(620,360)
         options_layout=QVBoxLayout(host.screen_options_dialog)
-        host.screen_mode_combo=PixelComboBox()
-        host.screen_mode_combo.addItem("鼠标框选区域","region")
-        host.screen_mode_combo.addItem("应用 / 游戏窗口","window")
         host.source_settings_button.clicked.connect(host.screen_options_dialog.show)
         custom.clicked.connect(host.screen_options_dialog.show)
         advanced = PixelCard()
         form = card_layout(advanced, QGridLayout)
-        host.interval_combo, host.ocr_quality_combo, host.ocr_backend_combo, host.window_crop_combo = (PixelComboBox() for _ in range(4))
-        for combo, items in ((host.interval_combo, REFRESH_PRESETS), (host.ocr_quality_combo, OCR_QUALITY_PRESETS),
-                             (host.ocr_backend_combo, [(name, key) for key, name in host._ocr.available_backends()]),
-                             (host.window_crop_combo, WINDOW_CROP_MODES)):
+        host.ocr_quality_combo, host.ocr_backend_combo = (PixelComboBox() for _ in range(2))
+        for combo, items in ((host.ocr_quality_combo, OCR_QUALITY_PRESETS),
+                             (host.ocr_backend_combo, [(name, key) for key, name in host._ocr.available_backends()])):
             for name, data in items:
                 combo.addItem(name, data)
-        host.window_crop_label = label("窗口识别范围")
-        for i, (title, widget) in enumerate(((label("扫描频率"), host.interval_combo), (label("OCR 质量"), host.ocr_quality_combo),
-                                            (label("OCR 引擎"), host.ocr_backend_combo), (host.window_crop_label, host.window_crop_combo))):
+        for i, (title, widget) in enumerate(((label("OCR 质量"), host.ocr_quality_combo),
+                                            (label("OCR 引擎"), host.ocr_backend_combo))):
             form.addWidget(title, i, 0)
             form.addWidget(widget, i, 1)
-        host.bind_window_check = QCheckBox("绑定来源窗口 · 最小化时暂停，恢复后继续")
-        host.bind_window_check.setChecked(True)
-        form.addWidget(host.bind_window_check, 4, 0, 1, 2)
-        host.once_button = PixelButton("框选并翻译", "screen")
-        host.once_button.clicked.connect(host._start_screen_once)
-        form.addWidget(host.once_button, 5, 0, 1, 2)
-        host.accel_label = label("推理加速：自动检测", muted=True)
+        host.accel_label = label("翻译模型固定使用 CPU INT8；语音识别可单独使用硬件加速。", muted=True)
         host.accel_label.setWordWrap(True)
-        form.addWidget(host.accel_label, 6, 0, 1, 2)
-        form.addWidget(label("识别来源"), 7, 0)
-        form.addWidget(host.screen_mode_combo, 7, 1)
+        form.addWidget(host.accel_label, 2, 0, 1, 2)
         options_layout.addWidget(advanced)
 
         result_button = PixelButton("查看最近翻译 · 点词 / 复制 / 朗读")
@@ -251,11 +224,6 @@ class ScreenPage(PixelNineSliceFrame):
         options_layout.addWidget(cancel)
 
 
-        host.screen_mode_combo.currentIndexChanged.connect(host._screen_mode_changed)
         host.usage_mode_combo.currentIndexChanged.connect(host._usage_mode_changed)
-        host.interval_combo.currentIndexChanged.connect(host._mark_performance_custom)
         host.ocr_quality_combo.currentIndexChanged.connect(host._mark_performance_custom)
         host.ocr_backend_combo.currentIndexChanged.connect(lambda _:host._save_settings())
-        host.window_crop_combo.currentIndexChanged.connect(lambda _:host._save_settings())
-        host.bind_window_check.toggled.connect(lambda _:host._save_settings())
-        host._screen_mode_changed()

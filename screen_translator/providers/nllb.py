@@ -28,10 +28,8 @@ class NLLBProvider(TranslationProvider):
         self._cache = TranslationCache()
         self._cpu_threads = max(1, min(6, (os.cpu_count() or 4) - 1))
         self._beam_size = 2
-        self._prefer_gpu = True
         self._device = "cpu"
         self._compute_type = "int8"
-        self._gpu_failure: str = ""
 
     @property
     def model_ready(self) -> bool:
@@ -41,26 +39,12 @@ class NLLBProvider(TranslationProvider):
                   prefer_gpu: bool | None = None, **_kwargs) -> None:
         new_threads = self._cpu_threads if cpu_threads is None else max(1, int(cpu_threads))
         new_beam = self._beam_size if beam_size is None else max(1, int(beam_size))
-        new_gpu = self._prefer_gpu if prefer_gpu is None else bool(prefer_gpu)
-        reload_required = new_threads != self._cpu_threads or new_gpu != self._prefer_gpu
-        self._cpu_threads, self._beam_size, self._prefer_gpu = new_threads, new_beam, new_gpu
+        reload_required = new_threads != self._cpu_threads
+        self._cpu_threads, self._beam_size = new_threads, new_beam
         if reload_required:
             self._translator = None
 
     def _make_translator(self, model_dir, status: StatusCallback = None) -> ctranslate2.Translator:
-        if self._prefer_gpu:
-            try:
-                if ctranslate2.get_cuda_device_count() > 0:
-                    if status:
-                        status("检测到 CUDA，正在使用 GPU 加速翻译…")
-                    tr = ctranslate2.Translator(str(model_dir), device="cuda", compute_type="auto",
-                                                inter_threads=1, intra_threads=1)
-                    self._device, self._compute_type, self._gpu_failure = "cuda", str(tr.compute_type), ""
-                    return tr
-            except Exception as exc:
-                self._gpu_failure = str(exc)
-                if status:
-                    status("CUDA 翻译不可用，已自动回退 CPU。")
         tr = ctranslate2.Translator(str(model_dir), device="cpu", compute_type="int8",
                                     inter_threads=1, intra_threads=self._cpu_threads)
         self._device, self._compute_type = "cpu", str(tr.compute_type)
@@ -115,6 +99,4 @@ class NLLBProvider(TranslationProvider):
             return translated
 
     def runtime_label(self) -> str:
-        if self._device == "cuda":
-            return f"NLLB · CUDA · {self._compute_type}"
         return f"NLLB · CPU · {self._compute_type}"

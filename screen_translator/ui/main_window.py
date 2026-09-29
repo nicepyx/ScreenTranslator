@@ -28,8 +28,6 @@ class MainWindow(DesktopActionsMixin, ExistingPagesMixin, PreservedPagesMixin, T
     def __init__(self):
         super().__init__()
         self._force_quit = False
-        self._queued_screen_capture = False
-        self._source_window_suspended = False
         self._storage_manager = StorageManager()
         self._vocabulary = VocabularyStore()
         self._hotkeys = GlobalHotkeyManager()

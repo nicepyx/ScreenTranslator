@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-import numpy as np
 from PySide6.QtCore import QRect, QThreadPool, QTimer, Qt
 from PySide6.QtGui import QColor, QCloseEvent, QFont, QFontDatabase
-from PySide6.QtWidgets import QApplication, QColorDialog, QComboBox, QFileDialog, QLabel, QMessageBox, QTableWidgetItem
+from PySide6.QtWidgets import QColorDialog, QComboBox, QFileDialog, QLabel, QMessageBox, QTableWidgetItem
 
 from ..constants import PERFORMANCE_PROFILES, LANGUAGE_CATALOG, SUBTITLE_PRESETS
 from ..core.audio import AudioTranscriber, list_audio_devices
@@ -17,10 +16,7 @@ from ..core.translator import LocalTranslator
 from ..core.text_pipeline import TranslationPipeline
 from ..core.history import TranslationHistory
 from ..core.app_settings import AppSettings
-from ..core.window_capture import crop_window_rect, get_application_window, list_application_windows
 from ..core.worker import TranslationWorker
-from ..core.stability import StableTextDetector
-from ..core.profiles import GameProfileStore
 from ..core.model_manager import ModelManager
 from .scene_presets import SCENE_PRESETS as USAGE_MODES
 from .overlay import TranslationOverlay
@@ -38,27 +34,16 @@ class TranslatorWindowLogicMixin:
         self._translator = LocalTranslator(self._model_manager)
         self._pipeline = TranslationPipeline(self._translator)
         self._history = TranslationHistory()
-        self._stable_detector = StableTextDetector()
-        self._profiles = GameProfileStore()
         self._runtime_monitor = RuntimePerformanceMonitor()
         self._audio_transcriber = AudioTranscriber(self._model_manager)
         self._audio_worker: AudioTranslationWorker | None = None
 
         self._selector: RegionSelector | None = None
         self._selected_rect: QRect | None = None
-        self._selected_window_key: str | None = None
         self._busy = False
-        self._live_mode = False
         self._audio_running = False
-        self._screen_signature: np.ndarray | None = None
-        self._last_ocr_text = ""
-        self._screen_pending_stability = False
         self._screen_task_generation = 0
-        self._screen_change_threshold = 1.35
-        self._performance_screen_threshold = 1.35
         self._applying_profile = False
-        self._applying_game_profile = False
-        self._stable_debounce_ms = 180
         self._partial_enabled = True
         self._partial_interval_ms = 1000
         self._vad_end_silence_ms = 420
@@ -74,8 +59,6 @@ class TranslatorWindowLogicMixin:
         self._hardware_info = detect_hardware()
         self._recommended_profile, self._recommendation_reason = recommend_profile(self._hardware_info)
 
-        self._live_timer = QTimer(self)
-        self._live_timer.timeout.connect(self._live_tick)
         self._perf_timer = QTimer(self)
         self._perf_timer.setInterval(1000)
         self._perf_timer.timeout.connect(self._update_runtime_metrics)
@@ -88,7 +71,6 @@ class TranslatorWindowLogicMixin:
     def _restore_runtime(self) -> None:
         self._restore_settings()
         self._refresh_audio_devices()
-        self._refresh_windows()
         self._load_history()
         self._refresh_model_status()
         self._apply_overlay_settings()
@@ -125,13 +107,9 @@ class TranslatorWindowLogicMixin:
                 combo.setCurrentIndex(idx)
 
         restore_combo(self.usage_mode_combo, "usage_mode", "general")
-        restore_combo(self.screen_mode_combo, "screen_mode", "window")
         restore_combo(self.source_combo, "source_language", "auto")
         restore_combo(self.target_combo, "target_language", "zh")
         restore_combo(self.ocr_backend_combo, "ocr_backend", "auto")
-        restore_combo(self.window_crop_combo, "window_crop", "bottom40")
-        self._saved_window_key = str(self._settings.value("window_key", ""))
-        self._saved_window_profile_key = str(self._settings.value("window_profile_key", ""))
         self._saved_audio_device_key = str(self._settings.value("audio_device_key", ""))
         restore_combo(self.audio_kind_combo, "audio_kind", "microphone" if is_macos() else "system")
         restore_combo(self.audio_source_combo, "audio_source_language", "auto")
@@ -155,12 +133,9 @@ class TranslatorWindowLogicMixin:
 
         self._applying_profile = True
         if saved_profile == "custom":
-            restore_combo(self.interval_combo, "refresh_ms", 1000)
             restore_combo(self.ocr_quality_combo, "ocr_quality", "balanced")
             restore_combo(self.whisper_model_combo, "whisper_model", "base")
             restore_combo(self.vad_sensitivity_combo, "vad_sensitivity", "normal")
-            self._screen_change_threshold = float(self._settings.value("screen_change_threshold", 1.35))
-            self._performance_screen_threshold = self._screen_change_threshold
             self._configure_runtime(
                 int(self._settings.value("runtime_cpu_threads", 6)),
                 int(self._settings.value("translation_beam", 2)),
@@ -203,7 +178,6 @@ class TranslatorWindowLogicMixin:
         self.overlay_lock_check.setChecked(locked)
         self.overlay_passthrough_check.setChecked(passthrough)
         self.subtitle_shadow_check.setChecked(shadow)
-        self._screen_mode_changed()
         self._restoring_settings = False
 
 
@@ -212,13 +186,8 @@ class TranslatorWindowLogicMixin:
             return
         values = {
             "usage_mode": self.usage_mode_combo.currentData(),
-            "screen_mode": self.screen_mode_combo.currentData(),
             "source_language": self.source_combo.currentData(),
             "target_language": self.target_combo.currentData(),
-            "window_key": self.window_combo.currentData() or "",
-            "window_profile_key": self._window_profile_id() or self._settings.value("window_profile_key", ""),
-            "window_crop": self.window_crop_combo.currentData(),
-            "refresh_ms": self.interval_combo.currentData(),
             "ocr_quality": self.ocr_quality_combo.currentData(),
             "ocr_backend": self.ocr_backend_combo.currentData(),
             "audio_kind": self.audio_kind_combo.currentData(),
@@ -229,7 +198,6 @@ class TranslatorWindowLogicMixin:
             "vad_sensitivity": self.vad_sensitivity_combo.currentData(),
             "partial_captions": self.partial_caption_check.isChecked(),
             "performance_profile": self.performance_combo.currentData(),
-            "screen_change_threshold": self._screen_change_threshold,
             "runtime_cpu_threads": getattr(self._translator.active_provider, "_cpu_threads", 6),
             "translation_beam": getattr(self._translator.active_provider, "_beam_size", 2),
             "whisper_beam": getattr(self._audio_transcriber, "_beam_size", 2),
@@ -257,8 +225,6 @@ class TranslatorWindowLogicMixin:
         }
         for key, value in values.items():
             self._settings.setValue(key, value)
-        if not self._applying_game_profile and self.screen_mode_combo.currentData() == "window":
-            self._save_current_game_profile()
 
 
     def _apply_overlay_settings(self) -> None:
@@ -564,132 +530,25 @@ class TranslatorWindowLogicMixin:
         persist: bool = True,
     ) -> None:
         info = USAGE_MODES.get(key, USAGE_MODES["general"])
-        self._stable_debounce_ms = int(info["stable_debounce_ms"])
         self._partial_enabled = bool(info["partial_enabled"])
         self._partial_interval_ms = int(info["partial_interval_ms"])
         self._vad_end_silence_ms = int(info["vad_end_silence_ms"])
         self._max_utterance_ms = int(info["max_utterance_ms"])
-        self._screen_change_threshold = min(
-            float(getattr(self, "_performance_screen_threshold", 1.35)),
-            float(info.get("screen_change_threshold", 1.35)),
-        )
         if update_controls:
             self._applying_profile = True
-            self._set_combo_data(self.interval_combo, int(info["refresh_ms"]))
             self._set_combo_data(self.ocr_quality_combo, str(info["ocr_quality"]))
             self.partial_caption_check.setChecked(self._partial_enabled)
             self._applying_profile = False
         else:
             # User can explicitly disable provisional subtitles even in a low-latency mode.
             self._partial_enabled = self.partial_caption_check.isChecked()
-        if self._live_mode:
-            self._live_timer.setInterval(int(self.interval_combo.currentData()))
         if persist:
             self._save_settings()
         if hasattr(self, "status_label"):
             self.status_label.setText(
-                f"已切换：{info['label']} · 稳定检测 {self._stable_debounce_ms}ms · "
+                f"已切换：{info['label']} · "
                 f"{'流式临时字幕' if self.partial_caption_check.isChecked() else '仅最终字幕'}"
             )
-
-
-    def _window_profile_id(self) -> str:
-        key = self.window_combo.currentData() if hasattr(self, "window_combo") else None
-        if not key:
-            return ""
-        info = get_application_window(str(key))
-        return info.profile_key if info is not None else ""
-
-
-    def _game_profile_snapshot(self) -> dict:
-        return {
-            "usage_mode": self.usage_mode_combo.currentData(),
-            "source_language": self.source_combo.currentData(),
-            "target_language": self.target_combo.currentData(),
-            "window_crop": self.window_crop_combo.currentData(),
-            "ocr_quality": self.ocr_quality_combo.currentData(),
-            "ocr_backend": self.ocr_backend_combo.currentData(),
-            "performance_profile": self.performance_combo.currentData(),
-            "overlay_opacity": self.opacity_slider.value(),
-            "overlay_font": self.font_size_spin.value(),
-            "overlay_source_font": self.source_font_size_spin.value(),
-            "overlay_font_color": self._font_color,
-            "overlay_source_font_color": self._source_font_color,
-            "overlay_font_family": self._font_family,
-            "overlay_custom_font_path": self._custom_font_path,
-            "overlay_display_mode": self.subtitle_display_combo.currentData(),
-            "overlay_max_lines": self.subtitle_lines_combo.currentData(),
-            "overlay_recent_count": self.subtitle_recent_combo.currentData(),
-            "overlay_retention_mode": self.subtitle_retention_combo.currentData(),
-            "overlay_smooth_updates": self.subtitle_smooth_check.isChecked(),
-            "overlay_shadow": self.subtitle_shadow_check.isChecked(),
-            "overlay_outline_width": self.outline_width_spin.value(),
-            "overlay_outline_color": self._outline_color,
-            "overlay_alignment": self.align_combo.currentData(),
-            "overlay_position": self.position_combo.currentData(),
-            "overlay_width": self.width_combo.currentData(),
-        }
-
-
-    def _save_current_game_profile(self) -> None:
-        profile_id = self._window_profile_id()
-        if profile_id:
-            try:
-                self._profiles.save(profile_id, self._game_profile_snapshot())
-            except Exception:
-                pass
-
-
-    def _window_profile_changed(self, *_args) -> None:
-        if self._restoring_settings or self._applying_game_profile:
-            return
-        profile_id = self._window_profile_id()
-        if not profile_id:
-            return
-        data = self._profiles.load(profile_id)
-        if not data:
-            return
-        self._applying_game_profile = True
-        try:
-            self._set_combo_data(self.usage_mode_combo, data.get("usage_mode", "game"))
-            self._set_combo_data(self.source_combo, data.get("source_language", "auto"))
-            self._set_combo_data(self.target_combo, data.get("target_language", "zh"))
-            self._set_combo_data(self.window_crop_combo, data.get("window_crop", "bottom40"))
-            self._set_combo_data(self.ocr_quality_combo, data.get("ocr_quality", "balanced"))
-            self._set_combo_data(self.ocr_backend_combo, data.get("ocr_backend", "auto"))
-            perf = data.get("performance_profile")
-            if perf is not None:
-                self._set_combo_data(self.performance_combo, perf)
-            self.opacity_slider.setValue(int(data.get("overlay_opacity", self.opacity_slider.value())))
-            self.font_size_spin.setValue(int(data.get("overlay_font", self.font_size_spin.value())))
-            self.source_font_size_spin.setValue(int(data.get("overlay_source_font", self.source_font_size_spin.value())))
-            self._font_color = str(data.get("overlay_font_color", self._font_color))
-            self._source_font_color = str(data.get("overlay_source_font_color", self._source_font_color))
-            self._outline_color = str(data.get("overlay_outline_color", self._outline_color))
-            self._font_family = str(data.get("overlay_font_family", self._font_family))
-            self._custom_font_path = str(data.get("overlay_custom_font_path", self._custom_font_path))
-            if self._custom_font_path and Path(self._custom_font_path).exists():
-                QFontDatabase.addApplicationFont(self._custom_font_path)
-            if self._font_family:
-                self.font_family_combo.setCurrentFont(QFont(self._font_family))
-            self._update_font_color_preview()
-            self._update_source_font_color_preview()
-            self._update_outline_color_preview()
-            self._set_combo_data(self.subtitle_display_combo, data.get("overlay_display_mode", "translation"))
-            self._set_combo_data(self.subtitle_lines_combo, data.get("overlay_max_lines", 2))
-            self._set_combo_data(self.subtitle_recent_combo, data.get("overlay_recent_count", 3))
-            self._set_combo_data(self.subtitle_retention_combo, data.get("overlay_retention_mode", "smart"))
-            self.subtitle_smooth_check.setChecked(bool(data.get("overlay_smooth_updates", True)))
-            self.subtitle_shadow_check.setChecked(bool(data.get("overlay_shadow", True)))
-            self.outline_width_spin.setValue(int(data.get("overlay_outline_width", 2)))
-            self._set_combo_data(self.align_combo, data.get("overlay_alignment", "center"))
-            self._set_combo_data(self.position_combo, data.get("overlay_position", "auto"))
-            self._set_combo_data(self.width_combo, data.get("overlay_width", "640"))
-            self._apply_usage_mode(str(self.usage_mode_combo.currentData() or "game"), update_controls=False, persist=False)
-            self._apply_overlay_settings()
-            self.status_label.setText("已自动载入此应用/游戏的独立 Profile。")
-        finally:
-            self._applying_game_profile = False
 
 
     def _redetect_hardware(self) -> None:
@@ -723,13 +582,13 @@ class TranslatorWindowLogicMixin:
             profile = PERFORMANCE_PROFILES[effective]
             self.performance_details_label.setText(
                 f"当前：{active_label}。{profile['description']}\n"
-                f"屏幕 {profile['refresh_ms']/1000:g}s / OCR {profile['ocr_quality']} / "
-                f"Whisper {profile['whisper_model']} / VAD {profile['vad_sensitivity']} / "
+                f"单次 OCR {profile['ocr_quality']} / Whisper {profile['whisper_model']} / "
+                f"VAD {profile['vad_sensitivity']} / "
                 f"最多 {profile['max_cpu_threads']} 推理线程。"
             )
         else:
             self.performance_details_label.setText(
-                "当前：自定义。你修改了扫描频率、OCR 质量、Whisper 模型或 VAD 灵敏度；程序会保留这些设置。"
+                "当前：自定义。你修改了 OCR 质量、Whisper 模型或 VAD 灵敏度；程序会保留这些设置。"
             )
 
 
@@ -779,26 +638,17 @@ class TranslatorWindowLogicMixin:
         profile = profile_settings(effective)
 
         self._applying_profile = True
-        self._set_combo_data(self.interval_combo, profile["refresh_ms"])
         self._set_combo_data(self.ocr_quality_combo, profile["ocr_quality"])
         self._set_combo_data(self.whisper_model_combo, profile["whisper_model"])
         self._set_combo_data(self.vad_sensitivity_combo, profile["vad_sensitivity"])
         self._applying_profile = False
 
-        self._performance_screen_threshold = float(profile["screen_change_threshold"])
-        mode_info = USAGE_MODES.get(str(self.usage_mode_combo.currentData() or "general"), USAGE_MODES["general"])
-        self._screen_change_threshold = min(
-            self._performance_screen_threshold,
-            float(mode_info.get("screen_change_threshold", self._performance_screen_threshold)),
-        )
         self._configure_runtime(
             int(profile["max_cpu_threads"]),
             int(profile["translation_beam"]),
             int(profile["whisper_beam"]),
             bool(profile.get("prefer_gpu", True)),
         )
-        if self._live_mode:
-            self._live_timer.setInterval(int(self.interval_combo.currentData()))
         self._refresh_performance_summary()
         if persist:
             self._save_settings()
@@ -824,118 +674,17 @@ class TranslatorWindowLogicMixin:
         self.accel_label.setText(f"加速：{translation_backend.replace('NLLB · ', '')} / {asr_backend.replace('Whisper · ', '')}")
 
 
-    def _screen_mode_changed(self, *_args) -> None:
-        if not hasattr(self, "screen_mode_combo"):
-            return
-        is_window = self.screen_mode_combo.currentData() == "window"
-        for widget in (self.window_label, self.window_combo, self.window_crop_label, self.window_crop_combo):
-            widget.setEnabled(is_window)
-        self.once_button.setText("翻译选中窗口" if is_window else "框选并翻译")
-        self.live_button.setText(
-            "停止实时翻译" if self._live_mode else ("开始窗口实时翻译" if is_window else "开始固定区域实时翻译")
-        )
-        if not self._restoring_settings and hasattr(self, "performance_combo"):
-            self._save_settings()
-
-
-    def _refresh_windows(self, *_args) -> None:
-        if not hasattr(self, "window_combo"):
-            return
-        current = self.window_combo.currentData() or getattr(self, "_saved_window_key", "")
-        saved_profile = getattr(self, "_saved_window_profile_key", "")
-        self.window_combo.clear()
-        try:
-            windows = list_application_windows()
-        except Exception as exc:
-            self.window_combo.addItem(f"读取窗口失败：{exc}", None)
-            return
-        profile_index = -1
-        for info in windows:
-            self.window_combo.addItem(info.display_name, info.key)
-            if saved_profile and info.profile_key == saved_profile:
-                profile_index = self.window_combo.count() - 1
-        if not windows:
-            self.window_combo.addItem("未找到可捕获窗口", None)
-        elif current:
-            idx = self.window_combo.findData(str(current))
-            if idx >= 0:
-                self.window_combo.setCurrentIndex(idx)
-            elif profile_index >= 0:
-                self.window_combo.setCurrentIndex(profile_index)
-        elif profile_index >= 0:
-            self.window_combo.setCurrentIndex(profile_index)
-        self._saved_window_key = ""
-        self._saved_window_profile_key = ""
-
-
-    def _current_window_rect(self) -> QRect | None:
-        key = self.window_combo.currentData()
-        if not key:
-            return None
-        info = get_application_window(str(key))
-        if info is None:
-            return None
-        return crop_window_rect(info.rect, str(self.window_crop_combo.currentData()))
-
-
     def _start_screen_once(self) -> None:
         if not self._require_model("translation-nllb", self._start_screen_once):
             return
-        if self.screen_mode_combo.currentData() == "window":
-            rect = self._current_window_rect()
-            if rect is None:
-                QMessageBox.information(self, "Screen Translator", "所选窗口已关闭或无法读取，请刷新窗口列表。")
-                return
-            if self._audio_running:
-                self._stop_audio()
-            self._live_mode = False
-            self._selected_rect = rect
-            self._screen_signature = None
-            self._last_ocr_text = ""
-            self._screen_pending_stability = False
-            self._stable_detector.reset()
-            self._capture_and_translate()
-            return
-        self._start_selection(live=False)
+        self._start_selection()
 
 
-    def _toggle_live(self) -> None:
-        if self._live_mode:
-            self._stop_live()
-            return
-        if not self._require_model("translation-nllb", self._toggle_live):
-            return
-        if self._audio_running:
-            self._stop_audio()
-        if self.screen_mode_combo.currentData() == "window":
-            rect = self._current_window_rect()
-            if rect is None:
-                QMessageBox.information(self, "Screen Translator", "所选窗口已关闭或无法读取，请刷新窗口列表。")
-                return
-            self._selected_rect = rect
-            self._live_mode = True
-            self._screen_signature = None
-            self._last_ocr_text = ""
-            self._screen_pending_stability = False
-            self._stable_detector.reset()
-            self.live_button.setText("停止实时翻译")
-            self.status_label.setText("窗口实时翻译已启动。游戏建议使用无边框/窗口化模式。")
-            self._live_timer.start(int(self.interval_combo.currentData()))
-            QTimer.singleShot(80, self._capture_and_translate)
-        else:
-            self._start_selection(live=True)
-
-
-    def _start_selection(self, live: bool) -> None:
+    def _start_selection(self) -> None:
         if self._busy:
             return
         if self._audio_running:
             self._stop_audio()
-        self._live_mode = live
-        self._screen_signature = None
-        self._last_ocr_text = ""
-        self._screen_pending_stability = False
-        self._stable_detector.reset()
         self.hide()
         self._overlay.hide()
         self._selector = RegionSelector()
@@ -945,7 +694,6 @@ class TranslatorWindowLogicMixin:
 
 
     def _selection_cancelled(self) -> None:
-        self._live_mode = False
         self.show()
         self.raise_()
         self.activateWindow()
@@ -954,41 +702,10 @@ class TranslatorWindowLogicMixin:
 
     def _region_selected(self, rect: QRect) -> None:
         self._selected_rect = rect
-        self._screen_signature = None
-        self._last_ocr_text = ""
-        self._screen_pending_stability = False
-        if self._live_mode:
-            self.live_button.setText("停止实时翻译")
-            self.status_label.setText("实时翻译已启动。")
-            self._live_timer.start(int(self.interval_combo.currentData()))
-        else:
-            self.show()
-            self.raise_()
-            self.activateWindow()
+        self.show()
+        self.raise_()
+        self.activateWindow()
         QTimer.singleShot(180, self._capture_and_translate)
-
-
-    def _live_tick(self) -> None:
-        if self._busy:
-            return
-        if self.screen_mode_combo.currentData() == "window":
-            rect = self._current_window_rect()
-            if rect is None:
-                self._stop_live(keep_status=True)
-                self.status_label.setText("所选应用窗口已关闭，实时翻译已停止。")
-                return
-            self._selected_rect = rect
-        if self._selected_rect is not None:
-            self._capture_and_translate()
-
-
-    @staticmethod
-    def _image_signature(image: np.ndarray) -> np.ndarray:
-        h, w = image.shape[:2]
-        sy = max(1, h // 32)
-        sx = max(1, w // 48)
-        sample = image[::sy, ::sx, :].astype(np.float32)
-        return sample.mean(axis=2)
 
 
     def _capture_and_translate(self) -> None:
@@ -1000,26 +717,8 @@ class TranslatorWindowLogicMixin:
             self._on_failed(str(exc))
             return
 
-        if self._live_mode:
-            sig = self._image_signature(image)
-            if (
-                not self._screen_pending_stability
-                and self._screen_signature is not None
-                and self._screen_signature.shape == sig.shape
-            ):
-                diff = float(np.mean(np.abs(sig - self._screen_signature)))
-                if diff < self._screen_change_threshold:
-                    self.status_label.setText("画面没有明显变化，等待下一次扫描…")
-                    return
-            self._screen_signature = sig
-
         self._busy = True
         self._set_screen_buttons_enabled(False)
-        if self.screen_mode_combo.currentData() == "window":
-            profile_id = self._window_profile_id() or "window"
-            channel = f"game:{profile_id}"
-        else:
-            channel = "screen"
         worker = TranslationWorker(
             image,
             self.source_combo.currentData(),
@@ -1027,12 +726,7 @@ class TranslatorWindowLogicMixin:
             self.ocr_quality_combo.currentData(),
             self._ocr,
             self._pipeline,
-            previous_text=self._last_ocr_text if self._live_mode else "",
-            channel=channel,
             ocr_backend=str(self.ocr_backend_combo.currentData() or "auto"),
-            stable_detector=self._stable_detector,
-            debounce_ms=self._stable_debounce_ms if self._live_mode else 0,
-            force=not self._live_mode,
             allowed_languages=set(self._language_packs.installed_codes()) if hasattr(self, "_language_packs") else None,
             task_id=getattr(self, "_screen_task_generation", 0),
         )
@@ -1045,30 +739,6 @@ class TranslatorWindowLogicMixin:
     def _on_screen_finished(self, result: dict) -> None:
         self._busy = False
         self._set_screen_buttons_enabled(True)
-        if result.get("pending"):
-            self._screen_pending_stability = True
-            waited = int(result.get("waited_ms", 0))
-            self.status_label.setText(
-                f"文字仍在变化，Stable Text Detector 等待稳定… {waited}/{self._stable_debounce_ms}ms"
-            )
-            if self._live_mode:
-                # Do not wait for the next normal refresh interval just to satisfy the debounce.
-                # A short one-shot retry gives the course preset an actual ~80 ms stability gate
-                # while normal OCR scans can remain less frequent.
-                retry_ms = max(40, self._stable_debounce_ms - waited + 10)
-                QTimer.singleShot(retry_ms, self._capture_and_translate)
-                if self.screen_mode_combo.currentData() != "window":
-                    self._show_controls_away_from_region()
-            return
-        if result.get("unchanged"):
-            self._screen_pending_stability = False
-            self.status_label.setText("识别文字没有变化，已跳过翻译。")
-            if self._live_mode and self.screen_mode_combo.currentData() != "window":
-                self._show_controls_away_from_region()
-            return
-
-        self._screen_pending_stability = False
-        self._last_ocr_text = result["source_text"]
         self.source_edit.setPlainText(result["source_text"])
         self.translation_edit.setPlainText(result["translated_text"])
         names = {code: info.get("label", code) for code, info in LANGUAGE_CATALOG.items()}
@@ -1084,8 +754,7 @@ class TranslatorWindowLogicMixin:
             f"上下文 {ctx} 条 · 术语 {terms} 个 · 词库 {domains} · OCR {ocr_backend}{fallback}"
             + (f" · {provider}" if provider else "")
         )
-        mode = "游戏窗口" if self.screen_mode_combo.currentData() == "window" else "屏幕"
-        self._record_history(mode, result)
+        self._record_history("屏幕", result)
         if self._selected_rect is not None and self.overlay_visible_check.isChecked():
             self._apply_overlay_settings()
             self._overlay.show_translation(
@@ -1093,53 +762,13 @@ class TranslatorWindowLogicMixin:
                 self._selected_rect,
                 source_text=result["source_text"],
             )
-        if self._live_mode:
-            if self.screen_mode_combo.currentData() != "window":
-                self._show_controls_away_from_region()
-        else:
-            self.show()
-            self.raise_()
-            self.activateWindow()
-
-
-    def _show_controls_away_from_region(self) -> None:
-        if self._selected_rect is None:
-            self.show()
-            return
-        screen = QApplication.screenAt(self._selected_rect.center()) or QApplication.primaryScreen()
-        available = screen.availableGeometry() if screen else self._selected_rect
-        margin = 12
-        candidates = [
-            (self._selected_rect.right() + margin, self._selected_rect.top()),
-            (self._selected_rect.left() - self.width() - margin, self._selected_rect.top()),
-            (available.right() - self.width(), available.top()),
-            (available.left(), available.bottom() - self.height()),
-        ]
-        for x, y in candidates:
-            window_rect = QRect(x, y, self.width(), self.height())
-            if available.contains(window_rect) and not window_rect.intersects(self._selected_rect):
-                self.move(x, y)
-                break
         self.show()
         self.raise_()
-
-
-    def _stop_live(self, keep_status: bool = False) -> None:
-        self._live_timer.stop()
-        self._live_mode = False
-        self._screen_signature = None
-        self._last_ocr_text = ""
-        self._screen_pending_stability = False
-        self._stable_detector.reset()
-        self._screen_mode_changed()
-        if not keep_status:
-            self.status_label.setText("实时翻译已停止。")
-        self._set_screen_buttons_enabled(True)
+        self.activateWindow()
 
 
     def _set_screen_buttons_enabled(self, enabled: bool) -> None:
-        self.once_button.setEnabled(enabled and not self._live_mode and not self._audio_running)
-        self.live_button.setEnabled((enabled or self._live_mode) and not self._audio_running)
+        self.once_button.setEnabled(enabled and not self._audio_running)
 
 
     def _refresh_audio_devices(self, *_args) -> None:
@@ -1176,8 +805,6 @@ class TranslatorWindowLogicMixin:
         )
         if not self._require_model(speech_model_id, self._toggle_audio):
             return
-        if self._live_mode:
-            self._stop_live()
         if self._busy:
             return
         device_key = self.audio_device_combo.currentData()
@@ -1293,8 +920,6 @@ class TranslatorWindowLogicMixin:
         self._busy = False
         self._set_screen_buttons_enabled(True)
         self.status_label.setText("失败：" + message)
-        if self._live_mode:
-            self._stop_live(keep_status=True)
         self.show()
         self.raise_()
         self.activateWindow()
@@ -1302,7 +927,6 @@ class TranslatorWindowLogicMixin:
 
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self._live_timer.stop()
         self._perf_timer.stop()
         if self._audio_worker is not None:
             self._audio_worker.stop()
